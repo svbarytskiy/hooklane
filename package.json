@@ -1,0 +1,25 @@
+{
+  "name": "billing-lab",
+  "version": "1.0.0",
+  "description": "7-day Stripe + Supabase Integration Lab for learning production-like billing flows.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:api": "npm run start:dev -w api",
+    "dev:web": "npm run dev -w web",
+    "build:api": "npm run build -w api",
+    "build:web": "npm run build -w web",
+    "lint:api": "npm run lint -w api",
+    "lint:web": "npm run lint -w web"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/db"
+  ]
+}
