@@ -1,5 +1,6 @@
 ﻿import axios from 'axios';
 import { env } from '../config/env';
+import { supabaseClient } from '../lib/supabase-client';
 
 export const apiClient = axios.create({
   baseURL: env.apiUrl,
@@ -7,4 +8,16 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+apiClient.interceptors.request.use(async (config) => {
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+
+  if (session?.access_token) {
+    config.headers.set('Authorization', `Bearer ${session.access_token}`);
+  }
+
+  return config;
 });

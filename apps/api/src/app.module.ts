@@ -7,6 +7,8 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { StripeModule } from './stripe/stripe.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { ProfilesModule } from './profiles/profiles.module';
     AuthModule,
     DatabaseModule,
     ProfilesModule,
+    StripeModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

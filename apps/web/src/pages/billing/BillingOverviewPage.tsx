@@ -1,24 +1,61 @@
-﻿import { Badge, Button, Group, Stack, Table, Text, Title } from '@mantine/core';
+﻿import {
+  Badge,
+  Button,
+  Group,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import { IconCreditCard } from '@tabler/icons-react';
-
-const rows = [
-  { flow: 'Stripe customer', status: 'Not started', endpoint: 'POST /billing/customer' },
-  { flow: 'One-time credits', status: 'Queued', endpoint: 'POST /billing/checkout/credits' },
-  { flow: 'Subscription', status: 'Queued', endpoint: 'POST /billing/checkout/subscription' },
-];
+import { useAuthSession } from '../../features/auth/model/use-auth-session';
+import { useBillingStateQuery } from '../../features/billing/api/use-billing-state-query';
+import { useCreateStripeCustomerMutation } from '../../features/billing/api/use-create-stripe-customer-mutation';
 
 export function BillingOverviewPage() {
+  const { accessToken } = useAuthSession();
+  const isAuthenticated = Boolean(accessToken);
+  const billingStateQuery = useBillingStateQuery(isAuthenticated);
+  const createCustomerMutation = useCreateStripeCustomerMutation();
+
+  const hasStripeCustomer = Boolean(
+    billingStateQuery.data?.stripeCustomer,
+  );
+
+  const rows = [
+    {
+      flow: 'Stripe customer',
+      status: hasStripeCustomer ? 'Ready' : 'Not started',
+      endpoint: 'POST /billing/customer',
+    },
+    {
+      flow: 'One-time credits',
+      status: 'Queued',
+      endpoint: 'POST /billing/checkout/credits',
+    },
+    {
+      flow: 'Subscription',
+      status: 'Queued',
+      endpoint: 'POST /billing/checkout/subscription',
+    },
+  ];
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-start">
         <div>
           <Title order={2}>Billing</Title>
           <Text c="dimmed" mt={4}>
-            Placeholder workspace for upcoming Stripe flows.
+            Stripe customer and billing state.
           </Text>
         </div>
-        <Button leftSection={<IconCreditCard size={18} />} disabled>
-          Create customer
+        <Button
+          leftSection={<IconCreditCard size={18} />}
+          disabled={!isAuthenticated || hasStripeCustomer}
+          loading={createCustomerMutation.isPending}
+          onClick={() => createCustomerMutation.mutate()}
+        >
+          {hasStripeCustomer ? 'Customer created' : 'Create customer'}
         </Button>
       </Group>
 
@@ -36,7 +73,10 @@ export function BillingOverviewPage() {
               <Table.Tr key={row.flow}>
                 <Table.Td>{row.flow}</Table.Td>
                 <Table.Td>
-                  <Badge variant="light" color="gray">
+                  <Badge
+                    variant="light"
+                    color={row.status === 'Ready' ? 'green' : 'gray'}
+                  >
                     {row.status}
                   </Badge>
                 </Table.Td>

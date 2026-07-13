@@ -21,7 +21,7 @@ import { useAuthSession } from '../model/use-auth-session';
 
 export function AuthPage() {
   const { session, accessToken, user } = useAuthSession();
-  const currentUserQuery = useCurrentUserQuery(accessToken);
+  const currentUserQuery = useCurrentUserQuery(Boolean(accessToken));
   const signInMutation = useSignInMutation();
   const signUpMutation = useSignUpMutation();
   const signOutMutation = useSignOutMutation();
@@ -142,3 +142,4 @@ export function AuthPage() {
     </Stack>
   );
 }
+

@@ -2,16 +2,10 @@
 import { getCurrentUser } from '../../../shared/api/auth-api';
 import { authQueryKeys } from '../model/auth-query-keys';
 
-export function useCurrentUserQuery(accessToken: string | undefined) {
+export function useCurrentUserQuery(isAuthenticated: boolean) {
   return useQuery({
     queryKey: authQueryKeys.me(),
-    enabled: Boolean(accessToken),
-    queryFn: () => {
-      if (!accessToken) {
-        throw new Error('Missing access token');
-      }
-
-      return getCurrentUser(accessToken);
-    },
+    enabled: isAuthenticated,
+    queryFn: getCurrentUser,
   });
 }

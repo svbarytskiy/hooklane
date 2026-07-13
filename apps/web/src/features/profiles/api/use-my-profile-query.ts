@@ -2,16 +2,10 @@
 import { getMyProfile } from '../../../shared/api/profiles-api';
 import { profileQueryKeys } from '../model/profile-query-keys';
 
-export function useMyProfileQuery(accessToken: string | undefined) {
+export function useMyProfileQuery(isAuthenticated: boolean) {
   return useQuery({
     queryKey: profileQueryKeys.me(),
-    enabled: Boolean(accessToken),
-    queryFn: () => {
-      if (!accessToken) {
-        throw new Error('Missing access token');
-      }
-
-      return getMyProfile(accessToken);
-    },
+    enabled: isAuthenticated,
+    queryFn: getMyProfile,
   });
 }

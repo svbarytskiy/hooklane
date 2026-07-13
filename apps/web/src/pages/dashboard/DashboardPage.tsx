@@ -36,7 +36,7 @@ const items = [
 
 export function DashboardPage() {
   const { accessToken } = useAuthSession();
-  const profileQuery = useMyProfileQuery(accessToken);
+  const profileQuery = useMyProfileQuery(Boolean(accessToken));
 
   return (
     <Stack gap="lg">
@@ -96,3 +96,4 @@ export function DashboardPage() {
     </Stack>
   );
 }
+
