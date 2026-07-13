@@ -5,6 +5,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
+import { DatabaseModule } from './database/database.module';
+import { ProfilesModule } from './profiles/profiles.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { AuthModule } from './auth/auth.module';
     }),
     SupabaseModule,
     AuthModule,
+    DatabaseModule,
+    ProfilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

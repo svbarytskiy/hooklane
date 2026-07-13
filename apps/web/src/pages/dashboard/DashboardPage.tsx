@@ -1,34 +1,49 @@
-﻿import { Badge, Group, SimpleGrid, Stack, Text, ThemeIcon, Title } from '@mantine/core';
-import { IconDatabase, IconKey, IconServer2 } from '@tabler/icons-react';
+﻿import {
+  Badge,
+  Code,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title,
+} from '@mantine/core';
+import { IconDatabase, IconKey, IconServer2, IconUserCircle } from '@tabler/icons-react';
+import { getApiErrorMessage } from '../../shared/api/api-error';
+import { useAuthSession } from '../../features/auth/model/use-auth-session';
+import { useMyProfileQuery } from '../../features/profiles/api/use-my-profile-query';
 
 const items = [
   {
     title: 'API shell',
-    description: 'Nest backend has config, Supabase client provider, and auth guard groundwork.',
+    description: 'Nest backend has config, Supabase client provider, auth guard, and Drizzle DB provider.',
     icon: IconServer2,
-    status: 'In progress',
+    status: 'Ready',
   },
   {
     title: 'Auth flow',
-    description: 'Next step is wiring Supabase browser auth and calling /auth/me with a bearer token.',
+    description: 'Supabase browser auth sends bearer tokens to protected Nest endpoints.',
     icon: IconKey,
-    status: 'Next',
+    status: 'Ready',
   },
   {
     title: 'Database',
-    description: 'Drizzle schema and Supabase migrations come after the auth handshake is proven.',
+    description: 'Supabase migrations own schema; Drizzle is used as the typed query layer.',
     icon: IconDatabase,
-    status: 'Queued',
+    status: 'In progress',
   },
 ];
 
 export function DashboardPage() {
+  const { accessToken } = useAuthSession();
+  const profileQuery = useMyProfileQuery(accessToken);
+
   return (
     <Stack gap="lg">
       <div>
         <Title order={2}>Dashboard</Title>
         <Text c="dimmed" mt={4}>
-          Starting surface for the billing lab. Keep it operational and boring on purpose.
+          Operational surface for the billing lab.
         </Text>
       </div>
 
@@ -55,6 +70,29 @@ export function DashboardPage() {
           );
         })}
       </SimpleGrid>
+
+      <Stack gap="sm" className="surface-panel">
+        <Group gap="sm">
+          <ThemeIcon variant="light" size="lg">
+            <IconUserCircle size={20} />
+          </ThemeIcon>
+          <div>
+            <Title order={4}>Current profile</Title>
+            <Text c="dimmed" size="sm">
+              Reads public.profiles through Nest /profiles/me and Drizzle.
+            </Text>
+          </div>
+        </Group>
+
+        {!accessToken && <Text size="sm">Sign in on the Auth page to load your profile.</Text>}
+        {profileQuery.isLoading && <Text size="sm">Loading profile...</Text>}
+        {profileQuery.isError && (
+          <Text size="sm" c="red">
+            {getApiErrorMessage(profileQuery.error)}
+          </Text>
+        )}
+        {profileQuery.data && <Code block>{JSON.stringify(profileQuery.data, null, 2)}</Code>}
+      </Stack>
     </Stack>
   );
 }
