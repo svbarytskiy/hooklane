@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  boolean,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -133,5 +134,36 @@ export const creditTransactions = pgTable(
       'credit_transactions_type_allowed',
       sql`${table.type} in ('purchase', 'refund', 'adjustment')`,
     ),
+  }),
+);
+
+export const billingCatalog = pgTable(
+  'billing_catalog',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    code: text('code').notNull().unique(),
+
+    stripeProductId: text('stripe_product_id').notNull(),
+
+    stripePriceId: text('stripe_price_id').notNull().unique(),
+
+    type: text('type').notNull(),
+
+    creditsAmount: integer('credits_amount'),
+
+    active: boolean('active').notNull().default(true),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    activeIdx: index('billing_catalog_active_idx').on(table.active),
+    typeIdx: index('billing_catalog_type_idx').on(table.type),
   }),
 );
