@@ -60,6 +60,12 @@ export class BillingService {
     };
   }
 
+  async getOrCreateStripeCustomerId(user: AuthenticatedUser): Promise<string> {
+    const customer = await this.getOrCreateStripeCustomer(user);
+
+    return customer.stripeCustomerId;
+  }
+
   private async findStripeCustomer(
     userId: string,
   ): Promise<StripeCustomerRecord | null> {

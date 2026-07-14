@@ -59,6 +59,8 @@ export const payments = pgTable(
 
     stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
 
+    checkoutIdempotencyKey: text('checkout_idempotency_key'),
+
     productType: text('product_type').notNull(),
 
     amount: integer('amount').notNull(),

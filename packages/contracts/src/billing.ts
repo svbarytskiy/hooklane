@@ -8,3 +8,12 @@ export type StripeCustomerResponse = {
 export type BillingStateResponse = {
   stripeCustomer: StripeCustomerResponse | null;
 };
+
+export type CreateCreditsCheckoutRequest = {
+  productCode: string;
+};
+
+export type CreateCheckoutResponse = {
+  paymentId: string;
+  checkoutUrl: string;
+};

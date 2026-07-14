@@ -1,44 +1,41 @@
-﻿import {
-  Badge,
-  Button,
-  Group,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from '@mantine/core';
-import { IconCreditCard } from '@tabler/icons-react';
-import { useAuthSession } from '../../features/auth/model/use-auth-session';
-import { useBillingStateQuery } from '../../features/billing/api/use-billing-state-query';
-import { useCreateStripeCustomerMutation } from '../../features/billing/api/use-create-stripe-customer-mutation';
+import { Badge, Button, Group, Stack, Table, Text, Title } from "@mantine/core";
+import { IconShoppingCart } from "@tabler/icons-react";
+import { useAuthSession } from "../../features/auth/model/use-auth-session";
+import { useBillingStateQuery } from "../../features/billing/api/use-billing-state-query";
+import { useCreateCreditsCheckoutMutation } from "../../features/billing/api/use-create-credits-checkout-mutation";
 
 export function BillingOverviewPage() {
   const { accessToken } = useAuthSession();
   const isAuthenticated = Boolean(accessToken);
   const billingStateQuery = useBillingStateQuery(isAuthenticated);
-  const createCustomerMutation = useCreateStripeCustomerMutation();
+  const createCreditsCheckoutMutation = useCreateCreditsCheckoutMutation();
 
-  const hasStripeCustomer = Boolean(
-    billingStateQuery.data?.stripeCustomer,
-  );
+  const hasStripeCustomer = Boolean(billingStateQuery.data?.stripeCustomer);
 
   const rows = [
     {
-      flow: 'Stripe customer',
-      status: hasStripeCustomer ? 'Ready' : 'Not started',
-      endpoint: 'POST /billing/customer',
+      flow: "Stripe customer",
+      status: hasStripeCustomer ? "Ready" : "Created on checkout",
+      endpoint: "POST /billing/customer",
     },
     {
-      flow: 'One-time credits',
-      status: 'Queued',
-      endpoint: 'POST /billing/checkout/credits',
+      flow: "One-time credits",
+      status: "Available",
+      endpoint: "POST /billing/checkout/credits",
     },
     {
-      flow: 'Subscription',
-      status: 'Queued',
-      endpoint: 'POST /billing/checkout/subscription',
+      flow: "Subscription",
+      status: "Queued",
+      endpoint: "POST /billing/checkout/subscription",
     },
   ];
+
+  const handleBuyCredits = () => {
+    createCreditsCheckoutMutation.mutate({
+      productCode: "credits_pack_100",
+      idempotencyKey: crypto.randomUUID(),
+    });
+  };
 
   return (
     <Stack gap="lg">
@@ -49,14 +46,17 @@ export function BillingOverviewPage() {
             Stripe customer and billing state.
           </Text>
         </div>
-        <Button
-          leftSection={<IconCreditCard size={18} />}
-          disabled={!isAuthenticated || hasStripeCustomer}
-          loading={createCustomerMutation.isPending}
-          onClick={() => createCustomerMutation.mutate()}
-        >
-          {hasStripeCustomer ? 'Customer created' : 'Create customer'}
-        </Button>
+
+        <Group>
+          <Button
+            leftSection={<IconShoppingCart size={18} />}
+            disabled={!isAuthenticated}
+            loading={createCreditsCheckoutMutation.isPending}
+            onClick={handleBuyCredits}
+          >
+            Buy 100 credits
+          </Button>
+        </Group>
       </Group>
 
       <Table.ScrollContainer minWidth={620} className="surface-panel">
@@ -75,7 +75,11 @@ export function BillingOverviewPage() {
                 <Table.Td>
                   <Badge
                     variant="light"
-                    color={row.status === 'Ready' ? 'green' : 'gray'}
+                    color={
+                      row.status === "Ready" || row.status === "Available"
+                        ? "green"
+                        : "gray"
+                    }
                   >
                     {row.status}
                   </Badge>
