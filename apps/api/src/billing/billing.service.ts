@@ -15,6 +15,13 @@ import type {
   StripeCustomerResponse,
 } from '@billing-lab/contracts';
 
+type StripeCustomerRecord = {
+  id: string;
+  stripeCustomerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 @Injectable()
 export class BillingService {
   constructor(
@@ -28,7 +35,35 @@ export class BillingService {
   async createCustomer(
     user: AuthenticatedUser,
   ): Promise<StripeCustomerResponse> {
-    const [existingCustomer] = await this.db
+    const customer = await this.getOrCreateStripeCustomer(user);
+
+    return {
+      id: customer.id,
+      stripeCustomerId: customer.stripeCustomerId,
+      createdAt: customer.createdAt.toISOString(),
+      updatedAt: customer.updatedAt.toISOString(),
+    };
+  }
+
+  async getBillingState(userId: string): Promise<BillingStateResponse> {
+    const customer = await this.findStripeCustomer(userId);
+
+    return {
+      stripeCustomer: customer
+        ? {
+            id: customer.id,
+            stripeCustomerId: customer.stripeCustomerId,
+            createdAt: customer.createdAt.toISOString(),
+            updatedAt: customer.updatedAt.toISOString(),
+          }
+        : null,
+    };
+  }
+
+  private async findStripeCustomer(
+    userId: string,
+  ): Promise<StripeCustomerRecord | null> {
+    const [customer] = await this.db
       .select({
         id: stripeCustomers.id,
         stripeCustomerId: stripeCustomers.stripeCustomerId,
@@ -36,16 +71,19 @@ export class BillingService {
         updatedAt: stripeCustomers.updatedAt,
       })
       .from(stripeCustomers)
-      .where(eq(stripeCustomers.userId, user.id))
+      .where(eq(stripeCustomers.userId, userId))
       .limit(1);
 
+    return customer ?? null;
+  }
+
+  private async getOrCreateStripeCustomer(
+    user: AuthenticatedUser,
+  ): Promise<StripeCustomerRecord> {
+    const existingCustomer = await this.findStripeCustomer(user.id);
+
     if (existingCustomer) {
-      return {
-        id: existingCustomer.id,
-        stripeCustomerId: existingCustomer.stripeCustomerId,
-        createdAt: existingCustomer.createdAt.toISOString(),
-        updatedAt: existingCustomer.updatedAt.toISOString(),
-      };
+      return existingCustomer;
     }
 
     const stripeCustomer = await this.stripe.customers.create(
@@ -60,54 +98,50 @@ export class BillingService {
       },
     );
 
-    const [createdCustomer] = await this.db
-      .insert(stripeCustomers)
-      .values({
-        userId: user.id,
-        stripeCustomerId: stripeCustomer.id,
-      })
-      .returning({
-        id: stripeCustomers.id,
-        stripeCustomerId: stripeCustomers.stripeCustomerId,
-        createdAt: stripeCustomers.createdAt,
-        updatedAt: stripeCustomers.updatedAt,
-      });
+    try {
+      const [createdCustomer] = await this.db
+        .insert(stripeCustomers)
+        .values({
+          userId: user.id,
+          stripeCustomerId: stripeCustomer.id,
+        })
+        .returning({
+          id: stripeCustomers.id,
+          stripeCustomerId: stripeCustomers.stripeCustomerId,
+          createdAt: stripeCustomers.createdAt,
+          updatedAt: stripeCustomers.updatedAt,
+        });
 
-    if (!createdCustomer) {
-      throw new InternalServerErrorException(
-        'Stripe customer was created but database record was not returned',
-      );
+      if (!createdCustomer) {
+        throw new InternalServerErrorException(
+          'Stripe customer was created but database record was not returned',
+        );
+      }
+
+      return createdCustomer;
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) {
+        throw error;
+      }
+
+      const existingCustomer = await this.findStripeCustomer(user.id);
+
+      if (!existingCustomer) {
+        throw new InternalServerErrorException(
+          'Customer already exists, but could not be loaded',
+        );
+      }
+
+      return existingCustomer;
     }
-    return {
-      id: createdCustomer.id,
-      stripeCustomerId: createdCustomer.stripeCustomerId,
-      createdAt: createdCustomer.createdAt.toISOString(),
-      updatedAt: createdCustomer.updatedAt.toISOString(),
-    };
   }
 
-  async getBillingState(userId: string) {
-    const [customer] = await this.db
-      .select({
-        id: stripeCustomers.id,
-        stripeCustomerId: stripeCustomers.stripeCustomerId,
-        createdAt: stripeCustomers.createdAt,
-        updatedAt: stripeCustomers.updatedAt,
-      })
-      .from(stripeCustomers)
-      .where(eq(stripeCustomers.userId, userId))
-      .limit(1);
-
-    const response: BillingStateResponse = {
-      stripeCustomer: customer
-        ? {
-            id: customer.id,
-            stripeCustomerId: customer.stripeCustomerId,
-            createdAt: customer.createdAt.toISOString(),
-            updatedAt: customer.updatedAt.toISOString(),
-          }
-        : null,
-    };
-    return response;
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505'
+    );
   }
 }
