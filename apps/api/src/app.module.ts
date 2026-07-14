@@ -1,4 +1,3 @@
-import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -9,6 +8,8 @@ import { DatabaseModule } from './database/database.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { StripeModule } from './stripe/stripe.module';
 import { BillingModule } from './billing/billing.module';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 
 @Module({
   imports: [
@@ -27,4 +28,8 @@ import { BillingModule } from './billing/billing.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestLoggingMiddleware).forRoutes('*');
+  }
+}

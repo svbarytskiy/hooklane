@@ -8,7 +8,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   API_URL: z.string().url(),
-
+  WEB_URL: z.string().url(),
   SUPABASE_URL: z.string().url(),
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
