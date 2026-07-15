@@ -146,6 +146,13 @@ export class CheckoutService {
             paymentId: payment.id,
             productCode: product.code,
           },
+          payment_intent_data: {
+            metadata: {
+              userId: user.id,
+              paymentId: payment.id,
+              productCode: product.code,
+            },
+          },
           success_url: `${webUrl}/billing/success?payment_id=${payment.id}`,
           cancel_url: `${webUrl}/billing/cancel?payment_id=${payment.id}`,
         },

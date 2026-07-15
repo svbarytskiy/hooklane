@@ -23,6 +23,17 @@ export class StripeWebhookProcessor {
         await this.handleCheckoutSessionCompleted(event);
         return 'processed';
 
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentIntentFailed(event);
+        return 'processed';
+
+      case 'payment_intent.succeeded':
+        await this.handlePaymentIntentSucceeded(event);
+        return 'processed';
+
+      case 'checkout.session.expired':
+        await this.handleCheckoutSessionExpired(event);
+        return 'processed';
       default:
         return 'ignored';
     }
@@ -83,6 +94,63 @@ export class StripeWebhookProcessor {
         description: 'Credits purchased through Stripe Checkout',
       });
     });
+  }
+
+  private async handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const paymentId = paymentIntent.metadata.paymentId;
+
+    if (!paymentId) {
+      throw new ConflictException('PaymentIntent has no payment reference');
+    }
+
+    await this.db
+      .update(payments)
+      .set({
+        stripePaymentIntentId: paymentIntent.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, paymentId));
+  }
+
+  private async handlePaymentIntentSucceeded(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const paymentId = paymentIntent.metadata.paymentId;
+
+    if (!paymentId) {
+      throw new ConflictException('PaymentIntent has no payment reference');
+    }
+
+    await this.db
+      .update(payments)
+      .set({
+        stripePaymentIntentId: paymentIntent.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, paymentId));
+  }
+
+  private async handleCheckoutSessionExpired(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paymentId = session.client_reference_id;
+
+    if (!paymentId) {
+      throw new ConflictException(
+        'Expired Checkout Session has no payment reference',
+      );
+    }
+
+    await this.db
+      .update(payments)
+      .set({
+        status: 'expired',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(payments.id, paymentId), eq(payments.status, 'pending')));
   }
 
   private getPaymentIntentId(session: Stripe.Checkout.Session): string | null {
