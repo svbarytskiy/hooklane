@@ -3,8 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { Env } from 'src/config/env.schema';
 import { STRIPE_CLIENT } from './stripe.tokens';
 import Stripe from 'stripe';
+import { StripeWebhookController } from './stripe-webhook.controller';
+import { StripeWebhookService } from './stripe-webhook.service';
+import { DatabaseModule } from 'src/database/database.module';
 
 @Module({
+  imports: [DatabaseModule],
+  controllers: [StripeWebhookController],
   providers: [
     {
       provide: STRIPE_CLIENT,
@@ -17,7 +22,8 @@ import Stripe from 'stripe';
         return new Stripe(secretKey);
       },
     },
+    StripeWebhookService,
   ],
-  exports: [STRIPE_CLIENT],
+  exports: [STRIPE_CLIENT, StripeWebhookService],
 })
 export class StripeModule {}

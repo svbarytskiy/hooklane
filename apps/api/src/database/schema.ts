@@ -1,13 +1,14 @@
 import { sql } from 'drizzle-orm';
 
 import {
+  boolean,
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
-  boolean,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -167,5 +168,50 @@ export const billingCatalog = pgTable(
   (table) => ({
     activeIdx: index('billing_catalog_active_idx').on(table.active),
     typeIdx: index('billing_catalog_type_idx').on(table.type),
+  }),
+);
+
+export const stripeWebhookEvents = pgTable(
+  'stripe_webhook_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    stripeEventId: text('stripe_event_id').notNull().unique(),
+
+    eventType: text('event_type').notNull(),
+
+    status: text('status').notNull().default('received'),
+
+    payload: jsonb('payload').notNull(),
+
+    error: text('error'),
+
+    receivedAt: timestamp('received_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    processedAt: timestamp('processed_at', {
+      withTimezone: true,
+    }),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index('stripe_webhook_events_status_idx').on(table.status),
+
+    eventTypeIdx: index('stripe_webhook_events_event_type_idx').on(
+      table.eventType,
+    ),
+
+    statusAllowed: check(
+      'stripe_webhook_events_status_allowed',
+      sql`${table.status} in ('received', 'processed', 'failed', 'ignored')`,
+    ),
   }),
 );
