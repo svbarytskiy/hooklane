@@ -7,11 +7,15 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
+import { StripeWebhookProcessor } from './stripe-webhook-processor.service';
 import { StripeWebhookService } from './stripe-webhook.service';
 
 @Controller('stripe')
 export class StripeWebhookController {
-  constructor(private readonly stripeWebhookService: StripeWebhookService) {}
+  constructor(
+    private readonly stripeWebhookService: StripeWebhookService,
+    private readonly stripeWebhookProcessor: StripeWebhookProcessor,
+  ) {}
 
   @Post('webhook')
   async handleWebhook(
@@ -31,13 +35,37 @@ export class StripeWebhookController {
       signature,
     );
 
-    const isNewEvent = await this.stripeWebhookService.storeEvent(event);
+    const storedEvent = await this.stripeWebhookService.storeEvent(event);
 
-    return {
-      received: true,
-      duplicate: !isNewEvent,
-      eventId: event.id,
-      eventType: event.type,
-    };
+    if (
+      storedEvent.status === 'processed' ||
+      storedEvent.status === 'ignored'
+    ) {
+      return {
+        received: true,
+        duplicate: !storedEvent.isNew,
+        eventId: event.id,
+        eventType: event.type,
+        status: storedEvent.status,
+      };
+    }
+
+    try {
+      const status = await this.stripeWebhookProcessor.process(event);
+
+      await this.stripeWebhookService.markEventStatus(event.id, status);
+
+      return {
+        received: true,
+        duplicate: !storedEvent.isNew,
+        eventId: event.id,
+        eventType: event.type,
+        status,
+      };
+    } catch (error) {
+      await this.stripeWebhookService.markEventFailed(event.id, error);
+
+      throw error;
+    }
   }
 }

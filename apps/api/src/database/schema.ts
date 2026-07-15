@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -127,6 +128,14 @@ export const creditTransactions = pgTable(
     paymentIdIdx: index('credit_transactions_payment_id_idx').on(
       table.paymentId,
     ),
+
+    purchasePaymentUnique: uniqueIndex(
+      'credit_transactions_purchase_payment_unique',
+    )
+      .on(table.paymentId)
+      .where(
+        sql`${table.type} = 'purchase' and ${table.paymentId} is not null`,
+      ),
 
     amountNonZero: check(
       'credit_transactions_amount_non_zero',
