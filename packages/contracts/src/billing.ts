@@ -17,3 +17,22 @@ export type CreateCheckoutResponse = {
   paymentId: string;
   checkoutUrl: string;
 };
+
+export type BillingPaymentResponse = {
+  id: string;
+  productType: string;
+  amount: number;
+  currency: string;
+  creditsAmount: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BillingPaymentsResponse = {
+  payments: BillingPaymentResponse[];
+};
+
+export type CreditsBalanceResponse = {
+  balance: number;
+};

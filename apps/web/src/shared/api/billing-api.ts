@@ -1,6 +1,8 @@
-﻿import type {
+import type {
+  BillingPaymentsResponse,
   BillingStateResponse,
   CreateCheckoutResponse,
+  CreditsBalanceResponse,
   StripeCustomerResponse,
 } from "@billing-lab/contracts";
 import { apiClient } from "./api-client";
@@ -19,6 +21,20 @@ export async function createStripeCustomer(): Promise<StripeCustomerResponse> {
 
 export async function getBillingState(): Promise<BillingStateResponse> {
   const response = await apiClient.get<BillingStateResponse>("/billing/state");
+
+  return response.data;
+}
+
+export async function getBillingPayments(): Promise<BillingPaymentsResponse> {
+  const response =
+    await apiClient.get<BillingPaymentsResponse>("/billing/payments");
+
+  return response.data;
+}
+
+export async function getCreditsBalance(): Promise<CreditsBalanceResponse> {
+  const response =
+    await apiClient.get<CreditsBalanceResponse>("/billing/credits");
 
   return response.data;
 }

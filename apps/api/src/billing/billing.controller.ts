@@ -45,4 +45,16 @@ export class BillingController {
   getBillingState(@CurrentUser() user: AuthenticatedUser) {
     return this.billingService.getBillingState(user.id);
   }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get('payments')
+  getPayments(@CurrentUser() user: AuthenticatedUser) {
+    return this.billingService.getPayments(user.id);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get('credits')
+  getCredits(@CurrentUser() user: AuthenticatedUser) {
+    return this.billingService.getCreditsBalance(user.id);
+  }
 }

@@ -5,4 +5,7 @@ export type {
   CreateCheckoutResponse,
   CreateCreditsCheckoutRequest,
   StripeCustomerResponse,
+  BillingPaymentResponse,
+  BillingPaymentsResponse,
+  CreditsBalanceResponse,
 } from "./billing.js";

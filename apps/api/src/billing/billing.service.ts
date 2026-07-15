@@ -7,11 +7,17 @@ import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import { STRIPE_CLIENT } from 'src/stripe/stripe.tokens';
 import type { StripeClient } from 'src/stripe/stripe.types';
-import { eq } from 'drizzle-orm';
-import { stripeCustomers } from 'src/database/schema';
+import { desc, eq, sql } from 'drizzle-orm';
+import {
+  creditTransactions,
+  payments,
+  stripeCustomers,
+} from 'src/database/schema';
 import type {
   AuthenticatedUser,
+  BillingPaymentsResponse,
   BillingStateResponse,
+  CreditsBalanceResponse,
   StripeCustomerResponse,
 } from '@billing-lab/contracts';
 
@@ -57,6 +63,47 @@ export class BillingService {
             updatedAt: customer.updatedAt.toISOString(),
           }
         : null,
+    };
+  }
+
+  async getPayments(userId: string): Promise<BillingPaymentsResponse> {
+    const paymentRecords = await this.db
+      .select({
+        id: payments.id,
+        productType: payments.productType,
+        amount: payments.amount,
+        currency: payments.currency,
+        creditsAmount: payments.creditsAmount,
+        status: payments.status,
+        createdAt: payments.createdAt,
+        updatedAt: payments.updatedAt,
+      })
+      .from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt))
+      .limit(20);
+
+    return {
+      payments: paymentRecords.map((payment) => ({
+        ...payment,
+        createdAt: payment.createdAt.toISOString(),
+        updatedAt: payment.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  async getCreditsBalance(userId: string): Promise<CreditsBalanceResponse> {
+    const [result] = await this.db
+      .select({
+        balance: sql<number>`
+        coalesce(sum(${creditTransactions.amount}), 0)::int
+      `,
+      })
+      .from(creditTransactions)
+      .where(eq(creditTransactions.userId, userId));
+
+    return {
+      balance: result?.balance ?? 0,
     };
   }
 
