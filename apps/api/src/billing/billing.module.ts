@@ -8,6 +8,7 @@ import { BillingCatalogService } from './billing-catalog.service';
 import { CheckoutService } from './checkout.service';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionCheckoutService } from './subscription-checkout.service';
+import { InvoiceService } from './invoice.service';
 
 @Module({
   imports: [DatabaseModule, StripeModule, AuthModule],
@@ -18,6 +19,7 @@ import { SubscriptionCheckoutService } from './subscription-checkout.service';
     CheckoutService,
     SubscriptionService,
     SubscriptionCheckoutService,
+    InvoiceService,
   ],
   exports: [SubscriptionService],
 })

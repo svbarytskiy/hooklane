@@ -60,3 +60,34 @@ export type BillingSubscription = {
 export type BillingSubscriptionResponse = {
   subscription: BillingSubscription | null;
 };
+
+export type BillingInvoice = {
+  id: string;
+  stripeInvoiceId: string;
+  invoiceNumber: string | null;
+  status: string;
+  currency: string;
+  amountDue: number;
+  amountPaid: number;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+  periodStart: string;
+  periodEnd: string;
+};
+
+export type BillingInvoicesResponse = {
+  invoices: BillingInvoice[];
+};
+
+export type BillingUpcomingInvoice = {
+  currency: string;
+  subtotal: number;
+  total: number;
+  amountDue: number;
+  periodStart: string;
+  periodEnd: string;
+};
+
+export type BillingUpcomingInvoiceResponse = {
+  invoice: BillingUpcomingInvoice | null;
+};

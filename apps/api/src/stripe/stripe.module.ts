@@ -7,6 +7,7 @@ import { StripeWebhookController } from './stripe-webhook.controller';
 import { StripeWebhookService } from './stripe-webhook.service';
 import { DatabaseModule } from 'src/database/database.module';
 import { StripeWebhookProcessor } from './stripe-webhook-processor.service';
+import { InvoiceSyncService } from './invoice-sync.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -25,6 +26,7 @@ import { StripeWebhookProcessor } from './stripe-webhook-processor.service';
     },
     StripeWebhookService,
     StripeWebhookProcessor,
+    InvoiceSyncService,
   ],
   exports: [STRIPE_CLIENT, StripeWebhookService],
 })

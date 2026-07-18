@@ -302,3 +302,79 @@ export const subscriptions = pgTable(
     ),
   }),
 );
+
+export const invoices = pgTable(
+  'invoices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+
+    stripeInvoiceId: text('stripe_invoice_id').notNull().unique(),
+
+    stripeCustomerId: text('stripe_customer_id').notNull(),
+
+    stripeSubscriptionId: text('stripe_subscription_id'),
+
+    invoiceNumber: text('invoice_number'),
+
+    status: text('status').notNull(),
+
+    currency: text('currency').notNull(),
+
+    amountDue: integer('amount_due').notNull(),
+
+    amountPaid: integer('amount_paid').notNull(),
+
+    hostedInvoiceUrl: text('hosted_invoice_url'),
+
+    invoicePdf: text('invoice_pdf'),
+
+    periodStart: timestamp('period_start', {
+      withTimezone: true,
+    }).notNull(),
+
+    periodEnd: timestamp('period_end', {
+      withTimezone: true,
+    }).notNull(),
+
+    stripeCreatedAt: timestamp('stripe_created_at', {
+      withTimezone: true,
+    }).notNull(),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdPeriodEndIdx: index('invoices_user_id_period_end_idx').on(
+      table.userId,
+      table.periodEnd.desc(),
+    ),
+
+    stripeCustomerIdIdx: index('invoices_stripe_customer_id_idx').on(
+      table.stripeCustomerId,
+    ),
+
+    stripeSubscriptionIdIdx: index('invoices_stripe_subscription_id_idx')
+      .on(table.stripeSubscriptionId)
+      .where(sql`${table.stripeSubscriptionId} is not null`),
+
+    statusIdx: index('invoices_status_idx').on(table.status),
+
+    statusAllowed: check(
+      'invoices_status_allowed',
+      sql`${table.status} in ('draft', 'open', 'paid', 'uncollectible', 'void')`,
+    ),
+  }),
+);

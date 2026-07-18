@@ -1,6 +1,8 @@
 import type {
   AuthenticatedUser,
+  BillingInvoicesResponse,
   BillingSubscriptionResponse,
+  BillingUpcomingInvoiceResponse,
 } from '@billing-lab/contracts';
 import {
   Body,
@@ -18,6 +20,7 @@ import { CreateCreditsCheckoutDto } from './dto/create-credits-checkout.dto';
 import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { CreateSubscriptionCheckoutDto } from './dto/create-subscription-checkout.dto';
 import { SubscriptionService } from './subscription.service';
+import { InvoiceService } from './invoice.service';
 
 @Controller('billing')
 export class BillingController {
@@ -26,6 +29,7 @@ export class BillingController {
     private readonly checkoutService: CheckoutService,
     private readonly subscriptionCheckoutService: SubscriptionCheckoutService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly invoiceService: InvoiceService,
   ) {}
 
   @UseGuards(SupabaseAuthGuard)
@@ -86,5 +90,21 @@ export class BillingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<BillingSubscriptionResponse> {
     return this.subscriptionService.getSubscriptionState(user.id);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get('invoices')
+  getInvoices(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<BillingInvoicesResponse> {
+    return this.invoiceService.getInvoices(user.id);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get('invoices/upcoming')
+  getUpcomingInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<BillingUpcomingInvoiceResponse> {
+    return this.invoiceService.getUpcomingInvoice(user.id);
   }
 }

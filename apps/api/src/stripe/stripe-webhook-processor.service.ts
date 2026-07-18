@@ -16,6 +16,7 @@ import {
 } from 'src/database/schema';
 import { STRIPE_CLIENT } from './stripe.tokens';
 import type { StripeClient } from './stripe.types';
+import { InvoiceSyncService } from './invoice-sync.service';
 
 @Injectable()
 export class StripeWebhookProcessor {
@@ -25,6 +26,8 @@ export class StripeWebhookProcessor {
 
     @Inject(STRIPE_CLIENT)
     private readonly stripe: StripeClient,
+
+    private readonly invoiceSyncService: InvoiceSyncService,
   ) {}
 
   async process(event: Stripe.Event): Promise<'processed' | 'ignored'> {
@@ -91,16 +94,26 @@ export class StripeWebhookProcessor {
         await this.handleSubscriptionChanged(event.data.object.id);
         return 'processed';
       }
+      case 'invoice.created':
+      case 'invoice.finalized':
+      case 'invoice.updated':
+      case 'invoice.voided':
+      case 'invoice.marked_uncollectible': {
+        await this.invoiceSyncService.syncInvoice(event.data.object);
+        return 'processed';
+      }
+
       case 'invoice.payment_succeeded':
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
+
+        await this.invoiceSyncService.syncInvoice(invoice);
+
         const stripeSubscriptionId = this.getInvoiceSubscriptionId(invoice);
 
-        if (!stripeSubscriptionId) {
-          return 'ignored';
+        if (stripeSubscriptionId) {
+          await this.handleSubscriptionChanged(stripeSubscriptionId);
         }
-
-        await this.handleSubscriptionChanged(stripeSubscriptionId);
 
         return 'processed';
       }

@@ -12,4 +12,8 @@ export type {
   CreateSubscriptionCheckoutResponse,
   BillingSubscription,
   BillingSubscriptionResponse,
+  BillingInvoice,
+  BillingInvoicesResponse,
+  BillingUpcomingInvoice,
+  BillingUpcomingInvoiceResponse,
 } from "./billing.js";
