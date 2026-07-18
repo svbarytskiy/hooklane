@@ -91,7 +91,19 @@ export class StripeWebhookProcessor {
         await this.handleSubscriptionChanged(event.data.object.id);
         return 'processed';
       }
+      case 'invoice.payment_succeeded':
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        const stripeSubscriptionId = this.getInvoiceSubscriptionId(invoice);
 
+        if (!stripeSubscriptionId) {
+          return 'ignored';
+        }
+
+        await this.handleSubscriptionChanged(stripeSubscriptionId);
+
+        return 'processed';
+      }
       default:
         return 'ignored';
     }
@@ -407,6 +419,16 @@ export class StripeWebhookProcessor {
     return typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent.id;
+  }
+
+  private getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+    const subscription = invoice.parent?.subscription_details?.subscription;
+
+    if (!subscription) {
+      return null;
+    }
+
+    return this.getStripeResourceId(subscription);
   }
 
   private isCreditsCheckoutSession(session: Stripe.Checkout.Session): boolean {

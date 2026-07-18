@@ -19,5 +19,6 @@ import { SubscriptionCheckoutService } from './subscription-checkout.service';
     SubscriptionService,
     SubscriptionCheckoutService,
   ],
+  exports: [SubscriptionService],
 })
 export class BillingModule {}

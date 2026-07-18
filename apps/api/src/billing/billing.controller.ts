@@ -1,4 +1,7 @@
-import type { AuthenticatedUser } from '@billing-lab/contracts';
+import type {
+  AuthenticatedUser,
+  BillingSubscriptionResponse,
+} from '@billing-lab/contracts';
 import {
   Body,
   Controller,
@@ -14,6 +17,7 @@ import { CheckoutService } from './checkout.service';
 import { CreateCreditsCheckoutDto } from './dto/create-credits-checkout.dto';
 import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { CreateSubscriptionCheckoutDto } from './dto/create-subscription-checkout.dto';
+import { SubscriptionService } from './subscription.service';
 
 @Controller('billing')
 export class BillingController {
@@ -21,6 +25,7 @@ export class BillingController {
     private readonly billingService: BillingService,
     private readonly checkoutService: CheckoutService,
     private readonly subscriptionCheckoutService: SubscriptionCheckoutService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   @UseGuards(SupabaseAuthGuard)
@@ -73,5 +78,13 @@ export class BillingController {
       dto,
       idempotencyKey,
     );
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get('subscription')
+  getSubscription(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<BillingSubscriptionResponse> {
+    return this.subscriptionService.getSubscriptionState(user.id);
   }
 }

@@ -10,6 +10,7 @@ import { StripeModule } from './stripe/stripe.module';
 import { BillingModule } from './billing/billing.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
+import { PremiumModule } from './premium/premium.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
     ProfilesModule,
     StripeModule,
     BillingModule,
+    PremiumModule,
   ],
   controllers: [AppController],
   providers: [AppService],

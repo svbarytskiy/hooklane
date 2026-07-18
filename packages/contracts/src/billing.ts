@@ -44,3 +44,19 @@ export type CreateSubscriptionCheckoutRequest = {
 export type CreateSubscriptionCheckoutResponse = {
   checkoutUrl: string;
 };
+
+export type BillingSubscription = {
+  id: string;
+  stripeSubscriptionId: string;
+  stripePriceId: string;
+  status: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  trialEnd: string | null;
+  canceledAt: string | null;
+};
+
+export type BillingSubscriptionResponse = {
+  subscription: BillingSubscription | null;
+};

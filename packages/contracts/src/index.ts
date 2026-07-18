@@ -10,4 +10,6 @@ export type {
   CreditsBalanceResponse,
   CreateSubscriptionCheckoutRequest,
   CreateSubscriptionCheckoutResponse,
+  BillingSubscription,
+  BillingSubscriptionResponse,
 } from "./billing.js";
