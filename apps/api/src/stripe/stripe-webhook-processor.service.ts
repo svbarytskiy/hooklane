@@ -8,40 +8,90 @@ import type Stripe from 'stripe';
 import { and, eq } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
-import { creditTransactions, payments } from 'src/database/schema';
+import {
+  creditTransactions,
+  payments,
+  stripeCustomers,
+  subscriptions,
+} from 'src/database/schema';
+import { STRIPE_CLIENT } from './stripe.tokens';
+import type { StripeClient } from './stripe.types';
 
 @Injectable()
 export class StripeWebhookProcessor {
   constructor(
     @Inject(DATABASE)
     private readonly db: Database,
+
+    @Inject(STRIPE_CLIENT)
+    private readonly stripe: StripeClient,
   ) {}
 
   async process(event: Stripe.Event): Promise<'processed' | 'ignored'> {
     switch (event.type) {
       case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object;
+
+        if (!this.isCreditsCheckoutSession(session)) {
+          return 'ignored';
+        }
+
         await this.handleCheckoutSessionCompleted(event);
         return 'processed';
+      }
 
-      case 'payment_intent.payment_failed':
-        await this.handlePaymentIntentFailed(event);
-        return 'processed';
+      case 'checkout.session.async_payment_failed': {
+        const session = event.data.object;
 
-      case 'payment_intent.succeeded':
-        await this.handlePaymentIntentSucceeded(event);
-        return 'processed';
+        if (!this.isCreditsCheckoutSession(session)) {
+          return 'ignored';
+        }
 
-      case 'checkout.session.expired':
-        await this.handleCheckoutSessionExpired(event);
-        return 'processed';
-
-      case 'checkout.session.async_payment_succeeded':
-        await this.handleCheckoutSessionCompleted(event);
-        return 'processed';
-
-      case 'checkout.session.async_payment_failed':
         await this.handleCheckoutSessionAsyncFailed(event);
         return 'processed';
+      }
+
+      case 'checkout.session.expired': {
+        const session = event.data.object;
+
+        if (!this.isCreditsCheckoutSession(session)) {
+          return 'ignored';
+        }
+
+        await this.handleCheckoutSessionExpired(event);
+        return 'processed';
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+
+        if (!this.isCreditsPaymentIntent(paymentIntent)) {
+          return 'ignored';
+        }
+
+        await this.handlePaymentIntentSucceeded(event);
+        return 'processed';
+      }
+
+      case 'payment_intent.payment_failed': {
+        const paymentIntent = event.data.object;
+
+        if (!this.isCreditsPaymentIntent(paymentIntent)) {
+          return 'ignored';
+        }
+
+        await this.handlePaymentIntentFailed(event);
+        return 'processed';
+      }
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        await this.handleSubscriptionChanged(event.data.object.id);
+        return 'processed';
+      }
+
       default:
         return 'ignored';
     }
@@ -272,6 +322,83 @@ export class StripeWebhookProcessor {
     }
   }
 
+  private async handleSubscriptionChanged(
+    stripeSubscriptionId: string,
+  ): Promise<void> {
+    const subscription =
+      await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+    const stripeCustomerId = this.getStripeResourceId(subscription.customer);
+
+    const [customer] = await this.db
+      .select({
+        userId: stripeCustomers.userId,
+      })
+      .from(stripeCustomers)
+      .where(eq(stripeCustomers.stripeCustomerId, stripeCustomerId))
+      .limit(1);
+
+    if (!customer) {
+      throw new NotFoundException(
+        `Stripe customer ${stripeCustomerId} is not linked to a user`,
+      );
+    }
+
+    const metadataUserId = subscription.metadata.userId;
+
+    if (metadataUserId && metadataUserId !== customer.userId) {
+      throw new ConflictException(
+        'Subscription metadata user does not match Stripe customer owner',
+      );
+    }
+
+    if (subscription.items.data.length !== 1) {
+      throw new ConflictException(
+        'Expected subscription to contain exactly one item',
+      );
+    }
+
+    const item = subscription.items.data[0];
+
+    if (!item) {
+      throw new ConflictException('Subscription item was not returned');
+    }
+
+    const values = {
+      userId: customer.userId,
+      stripeCustomerId,
+      stripeSubscriptionId: subscription.id,
+      stripeSubscriptionItemId: item.id,
+      stripePriceId: item.price.id,
+      status: subscription.status,
+      currentPeriodStart: this.fromStripeTimestamp(item.current_period_start),
+      currentPeriodEnd: this.fromStripeTimestamp(item.current_period_end),
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      trialEnd: this.fromNullableStripeTimestamp(subscription.trial_end),
+      canceledAt: this.fromNullableStripeTimestamp(subscription.canceled_at),
+      updatedAt: new Date(),
+    };
+
+    await this.db
+      .insert(subscriptions)
+      .values(values)
+      .onConflictDoUpdate({
+        target: subscriptions.stripeSubscriptionId,
+        set: {
+          stripeCustomerId: values.stripeCustomerId,
+          stripeSubscriptionItemId: values.stripeSubscriptionItemId,
+          stripePriceId: values.stripePriceId,
+          status: values.status,
+          currentPeriodStart: values.currentPeriodStart,
+          currentPeriodEnd: values.currentPeriodEnd,
+          cancelAtPeriodEnd: values.cancelAtPeriodEnd,
+          trialEnd: values.trialEnd,
+          canceledAt: values.canceledAt,
+          updatedAt: values.updatedAt,
+        },
+      });
+  }
+
   private getPaymentIntentId(session: Stripe.Checkout.Session): string | null {
     if (!session.payment_intent) {
       return null;
@@ -280,5 +407,25 @@ export class StripeWebhookProcessor {
     return typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent.id;
+  }
+
+  private isCreditsCheckoutSession(session: Stripe.Checkout.Session): boolean {
+    return session.mode === 'payment' && Boolean(session.metadata?.paymentId);
+  }
+
+  private isCreditsPaymentIntent(paymentIntent: Stripe.PaymentIntent): boolean {
+    return Boolean(paymentIntent.metadata.paymentId);
+  }
+
+  private fromStripeTimestamp(value: number): Date {
+    return new Date(value * 1000);
+  }
+
+  private fromNullableStripeTimestamp(value: number | null): Date | null {
+    return value === null ? null : this.fromStripeTimestamp(value);
+  }
+
+  private getStripeResourceId(resource: string | { id: string }): string {
+    return typeof resource === 'string' ? resource : resource.id;
   }
 }

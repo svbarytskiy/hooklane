@@ -13,6 +13,14 @@ values (
   'one_time',
   100,
   true
+),
+(
+  'pro_monthly',
+  'prod_Uu6M6HK355QI7w',
+  'price_1TuI9fPryFIic72B57f3gd6J',
+  'subscription',
+  null,
+  true
 )
 on conflict (code) do update set
   stripe_product_id = excluded.stripe_product_id,

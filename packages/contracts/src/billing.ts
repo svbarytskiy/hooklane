@@ -36,3 +36,11 @@ export type BillingPaymentsResponse = {
 export type CreditsBalanceResponse = {
   balance: number;
 };
+
+export type CreateSubscriptionCheckoutRequest = {
+  productCode: string;
+};
+
+export type CreateSubscriptionCheckoutResponse = {
+  checkoutUrl: string;
+};

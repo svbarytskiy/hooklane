@@ -12,12 +12,15 @@ import { SupabaseAuthGuard } from 'src/auth/supabase-auth/supabase-auth.guard';
 import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
 import { CreateCreditsCheckoutDto } from './dto/create-credits-checkout.dto';
+import { SubscriptionCheckoutService } from './subscription-checkout.service';
+import { CreateSubscriptionCheckoutDto } from './dto/create-subscription-checkout.dto';
 
 @Controller('billing')
 export class BillingController {
   constructor(
     private readonly billingService: BillingService,
     private readonly checkoutService: CheckoutService,
+    private readonly subscriptionCheckoutService: SubscriptionCheckoutService,
   ) {}
 
   @UseGuards(SupabaseAuthGuard)
@@ -56,5 +59,19 @@ export class BillingController {
   @Get('credits')
   getCredits(@CurrentUser() user: AuthenticatedUser) {
     return this.billingService.getCreditsBalance(user.id);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Post('checkout/subscription')
+  createSubscriptionCheckout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateSubscriptionCheckoutDto,
+    @Headers('Idempotency-Key') idempotencyKey: string | undefined,
+  ) {
+    return this.subscriptionCheckoutService.createSubscriptionCheckout(
+      user,
+      dto,
+      idempotencyKey,
+    );
   }
 }

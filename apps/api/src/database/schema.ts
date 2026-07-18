@@ -224,3 +224,81 @@ export const stripeWebhookEvents = pgTable(
     ),
   }),
 );
+
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+
+    stripeCustomerId: text('stripe_customer_id').notNull(),
+
+    stripeSubscriptionId: text('stripe_subscription_id').notNull().unique(),
+
+    stripeSubscriptionItemId: text('stripe_subscription_item_id')
+      .notNull()
+      .unique(),
+
+    stripePriceId: text('stripe_price_id').notNull(),
+
+    status: text('status').notNull(),
+
+    currentPeriodStart: timestamp('current_period_start', {
+      withTimezone: true,
+    }).notNull(),
+
+    currentPeriodEnd: timestamp('current_period_end', {
+      withTimezone: true,
+    }).notNull(),
+
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+
+    trialEnd: timestamp('trial_end', {
+      withTimezone: true,
+    }),
+
+    canceledAt: timestamp('canceled_at', {
+      withTimezone: true,
+    }),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('subscriptions_user_id_idx').on(table.userId),
+
+    statusIdx: index('subscriptions_status_idx').on(table.status),
+
+    oneCurrentPerUser: uniqueIndex('subscriptions_one_current_per_user_unique')
+      .on(table.userId)
+      .where(
+        sql`${table.status} in ('incomplete', 'trialing', 'active', 'past_due', 'unpaid', 'paused')`,
+      ),
+
+    statusAllowed: check(
+      'subscriptions_status_allowed',
+      sql`${table.status} in (
+        'incomplete',
+        'incomplete_expired',
+        'trialing',
+        'active',
+        'past_due',
+        'canceled',
+        'unpaid',
+        'paused'
+      )`,
+    ),
+  }),
+);

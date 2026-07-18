@@ -8,4 +8,6 @@ export type {
   BillingPaymentResponse,
   BillingPaymentsResponse,
   CreditsBalanceResponse,
+  CreateSubscriptionCheckoutRequest,
+  CreateSubscriptionCheckoutResponse,
 } from "./billing.js";
