@@ -10,13 +10,24 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconShoppingCart } from "@tabler/icons-react";
+import { IconCrown, IconShoppingCart } from "@tabler/icons-react";
 import { useAuthSession } from "../../features/auth/model/use-auth-session";
 import { useBillingPaymentsQuery } from "../../features/billing/api/use-billing-payments-query";
 import { useBillingStateQuery } from "../../features/billing/api/use-billing-state-query";
+import { useBillingSubscriptionQuery } from "../../features/billing/api/use-billing-subscription-query";
 import { useCreateCreditsCheckoutMutation } from "../../features/billing/api/use-create-credits-checkout-mutation";
+import { useCreateSubscriptionCheckoutMutation } from "../../features/billing/api/use-create-subscription-checkout-mutation";
 import { useCreditsBalanceQuery } from "../../features/billing/api/use-credits-balance-query";
 import { getApiErrorMessage } from "../../shared/api/api-error";
+
+const CURRENT_SUBSCRIPTION_STATUSES = new Set([
+  "incomplete",
+  "trialing",
+  "active",
+  "past_due",
+  "unpaid",
+  "paused",
+]);
 
 function formatPaymentAmount(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, {
@@ -25,7 +36,7 @@ function formatPaymentAmount(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
-function formatPaymentDate(value: string) {
+function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -35,11 +46,17 @@ function formatPaymentDate(value: string) {
 function getStatusColor(status: string) {
   switch (status) {
     case "paid":
+    case "active":
+    case "trialing":
       return "green";
     case "failed":
     case "canceled":
     case "expired":
+    case "incomplete_expired":
+    case "unpaid":
       return "red";
+    case "paused":
+      return "gray";
     default:
       return "yellow";
   }
@@ -51,10 +68,17 @@ export function BillingOverviewPage() {
   const billingStateQuery = useBillingStateQuery(isAuthenticated);
   const billingPaymentsQuery = useBillingPaymentsQuery(isAuthenticated);
   const creditsBalanceQuery = useCreditsBalanceQuery(isAuthenticated);
+  const billingSubscriptionQuery = useBillingSubscriptionQuery(isAuthenticated);
   const createCreditsCheckoutMutation = useCreateCreditsCheckoutMutation();
+  const createSubscriptionCheckoutMutation =
+    useCreateSubscriptionCheckoutMutation();
 
   const hasStripeCustomer = Boolean(billingStateQuery.data?.stripeCustomer);
   const payments = billingPaymentsQuery.data?.payments ?? [];
+  const subscription = billingSubscriptionQuery.data?.subscription ?? null;
+  const hasCurrentSubscription = Boolean(
+    subscription && CURRENT_SUBSCRIPTION_STATUSES.has(subscription.status),
+  );
 
   const rows = [
     {
@@ -69,7 +93,7 @@ export function BillingOverviewPage() {
     },
     {
       flow: "Subscription",
-      status: "Queued",
+      status: subscription?.status ?? "Available",
       endpoint: "POST /billing/checkout/subscription",
     },
   ];
@@ -81,9 +105,22 @@ export function BillingOverviewPage() {
     });
   };
 
+  const handleSubscribe = () => {
+    createSubscriptionCheckoutMutation.mutate({
+      productCode: "pro_monthly",
+      idempotencyKey: crypto.randomUUID(),
+    });
+  };
+
+  const billingError =
+    billingStateQuery.error ??
+    billingPaymentsQuery.error ??
+    creditsBalanceQuery.error ??
+    billingSubscriptionQuery.error;
+
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-start">
+      <Group justify="space-between" align="flex-start" wrap="wrap">
         <div>
           <Title order={2}>Billing</Title>
           <Text c="dimmed" mt={4}>
@@ -91,32 +128,42 @@ export function BillingOverviewPage() {
           </Text>
         </div>
 
-        <Button
-          leftSection={<IconShoppingCart size={18} />}
-          disabled={!isAuthenticated}
-          loading={createCreditsCheckoutMutation.isPending}
-          onClick={handleBuyCredits}
-        >
-          Buy 100 credits
-        </Button>
+        <Group>
+          <Button
+            leftSection={<IconShoppingCart size={18} />}
+            disabled={!isAuthenticated}
+            loading={createCreditsCheckoutMutation.isPending}
+            onClick={handleBuyCredits}
+          >
+            Buy 100 credits
+          </Button>
+          <Button
+            variant="light"
+            leftSection={<IconCrown size={18} />}
+            disabled={!isAuthenticated || hasCurrentSubscription}
+            loading={createSubscriptionCheckoutMutation.isPending}
+            onClick={handleSubscribe}
+          >
+            {hasCurrentSubscription
+              ? "Subscription exists"
+              : "Subscribe to Pro"}
+          </Button>
+        </Group>
       </Group>
 
       {!isAuthenticated && (
         <Alert color="blue" title="Sign in required">
-          Sign in to view your payments and credits balance.
+          Sign in to view your payments, credits, and subscription.
         </Alert>
       )}
 
-      {isAuthenticated &&
-        (billingPaymentsQuery.isError || creditsBalanceQuery.isError) && (
-          <Alert color="red" title="Billing data could not be loaded">
-            {getApiErrorMessage(
-              billingPaymentsQuery.error ?? creditsBalanceQuery.error,
-            )}
-          </Alert>
-        )}
+      {isAuthenticated && billingError && (
+        <Alert color="red" title="Billing data could not be loaded">
+          {getApiErrorMessage(billingError)}
+        </Alert>
+      )}
 
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         <Stack gap={4} className="surface-panel">
           <Text size="sm" c="dimmed">
             Credits balance
@@ -139,6 +186,30 @@ export function BillingOverviewPage() {
                 ? "Connected"
                 : "Created on checkout"}
           </Text>
+        </Stack>
+
+        <Stack gap={6} className="surface-panel">
+          <Text size="sm" c="dimmed">
+            Subscription
+          </Text>
+          {billingSubscriptionQuery.isLoading ? (
+            <Text fw={500}>Loading...</Text>
+          ) : subscription ? (
+            <>
+              <Badge
+                variant="light"
+                color={getStatusColor(subscription.status)}
+                w="fit-content"
+              >
+                {subscription.status}
+              </Badge>
+              <Text size="sm" c="dimmed">
+                Period ends {formatDate(subscription.currentPeriodEnd)}
+              </Text>
+            </>
+          ) : (
+            <Text fw={500}>Not subscribed</Text>
+          )}
         </Stack>
       </SimpleGrid>
 
@@ -187,7 +258,7 @@ export function BillingOverviewPage() {
                         {payment.status}
                       </Badge>
                     </Table.Td>
-                    <Table.Td>{formatPaymentDate(payment.createdAt)}</Table.Td>
+                    <Table.Td>{formatDate(payment.createdAt)}</Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -210,14 +281,7 @@ export function BillingOverviewPage() {
               <Table.Tr key={row.flow}>
                 <Table.Td>{row.flow}</Table.Td>
                 <Table.Td>
-                  <Badge
-                    variant="light"
-                    color={
-                      row.status === "Ready" || row.status === "Available"
-                        ? "green"
-                        : "gray"
-                    }
-                  >
+                  <Badge variant="light" color={getStatusColor(row.status)}>
                     {row.status}
                   </Badge>
                 </Table.Td>

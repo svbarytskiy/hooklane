@@ -2,13 +2,14 @@ import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { getApiErrorMessage } from "../../../shared/api/api-error";
 import {
-  createCreditsCheckout,
+  createSubscriptionCheckout,
   type CreateCheckoutInput,
 } from "../../../shared/api/billing-api";
 
-export function useCreateCreditsCheckoutMutation() {
+export function useCreateSubscriptionCheckoutMutation() {
   return useMutation({
-    mutationFn: (input: CreateCheckoutInput) => createCreditsCheckout(input),
+    mutationFn: (input: CreateCheckoutInput) =>
+      createSubscriptionCheckout(input),
 
     onSuccess: ({ checkoutUrl }) => {
       window.location.assign(checkoutUrl);
@@ -17,7 +18,7 @@ export function useCreateCreditsCheckoutMutation() {
     onError: (error) => {
       notifications.show({
         color: "red",
-        title: "Checkout creation failed",
+        title: "Subscription checkout failed",
         message: getApiErrorMessage(error),
       });
     },
