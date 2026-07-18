@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -9,16 +10,21 @@ import {
   Table,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconCreditCard,
+  IconDownload,
+  IconExternalLink,
   IconCrown,
   IconShoppingCart,
 } from "@tabler/icons-react";
 import { useAuthSession } from "../../features/auth/model/use-auth-session";
+import { useBillingInvoicesQuery } from "../../features/billing/api/use-billing-invoices-query";
 import { useBillingPaymentsQuery } from "../../features/billing/api/use-billing-payments-query";
 import { useBillingStateQuery } from "../../features/billing/api/use-billing-state-query";
 import { useBillingSubscriptionQuery } from "../../features/billing/api/use-billing-subscription-query";
+import { useBillingUpcomingInvoiceQuery } from "../../features/billing/api/use-billing-upcoming-invoice-query";
 import { useCreateBillingPortalMutation } from "../../features/billing/api/use-create-billing-portal-mutation";
 import { useCreateCreditsCheckoutMutation } from "../../features/billing/api/use-create-credits-checkout-mutation";
 import { useCreateSubscriptionCheckoutMutation } from "../../features/billing/api/use-create-subscription-checkout-mutation";
@@ -34,7 +40,7 @@ const CURRENT_SUBSCRIPTION_STATUSES = new Set([
   "paused",
 ]);
 
-function formatPaymentAmount(amount: number, currency: string) {
+function formatAmount(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: currency.toUpperCase(),
@@ -74,6 +80,9 @@ export function BillingOverviewPage() {
   const billingPaymentsQuery = useBillingPaymentsQuery(isAuthenticated);
   const creditsBalanceQuery = useCreditsBalanceQuery(isAuthenticated);
   const billingSubscriptionQuery = useBillingSubscriptionQuery(isAuthenticated);
+  const billingInvoicesQuery = useBillingInvoicesQuery(isAuthenticated);
+  const billingUpcomingInvoiceQuery =
+    useBillingUpcomingInvoiceQuery(isAuthenticated);
   const createCreditsCheckoutMutation = useCreateCreditsCheckoutMutation();
   const createBillingPortalMutation = useCreateBillingPortalMutation();
   const createSubscriptionCheckoutMutation =
@@ -81,6 +90,8 @@ export function BillingOverviewPage() {
 
   const hasStripeCustomer = Boolean(billingStateQuery.data?.stripeCustomer);
   const payments = billingPaymentsQuery.data?.payments ?? [];
+  const invoiceHistory = billingInvoicesQuery.data?.invoices ?? [];
+  const upcomingInvoice = billingUpcomingInvoiceQuery.data?.invoice ?? null;
   const subscription = billingSubscriptionQuery.data?.subscription ?? null;
   const hasCurrentSubscription = Boolean(
     subscription && CURRENT_SUBSCRIPTION_STATUSES.has(subscription.status),
@@ -228,6 +239,55 @@ export function BillingOverviewPage() {
         </Stack>
       </SimpleGrid>
 
+      <Stack gap="md" className="surface-panel">
+        <Title order={4}>Next invoice</Title>
+
+        {billingUpcomingInvoiceQuery.isLoading && (
+          <Text size="sm" c="dimmed">
+            Loading upcoming invoice...
+          </Text>
+        )}
+
+        {!billingUpcomingInvoiceQuery.isLoading && !upcomingInvoice && (
+          <Text size="sm" c="dimmed">
+            No upcoming invoice.
+          </Text>
+        )}
+
+        {upcomingInvoice && (
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <div>
+              <Text size="sm" c="dimmed">
+                Amount due
+              </Text>
+              <Text fw={600} size="lg">
+                {formatAmount(
+                  upcomingInvoice.amountDue,
+                  upcomingInvoice.currency,
+                )}
+              </Text>
+            </div>
+            <div>
+              <Text size="sm" c="dimmed">
+                Subtotal
+              </Text>
+              <Text fw={500}>
+                {formatAmount(
+                  upcomingInvoice.subtotal,
+                  upcomingInvoice.currency,
+                )}
+              </Text>
+            </div>
+            <div>
+              <Text size="sm" c="dimmed">
+                Period ends
+              </Text>
+              <Text fw={500}>{formatDate(upcomingInvoice.periodEnd)}</Text>
+            </div>
+          </SimpleGrid>
+        )}
+      </Stack>
+
       <Stack gap="sm" className="surface-panel">
         <Title order={4}>Recent payments</Title>
 
@@ -262,7 +322,7 @@ export function BillingOverviewPage() {
                       <Code>{payment.productType}</Code>
                     </Table.Td>
                     <Table.Td>
-                      {formatPaymentAmount(payment.amount, payment.currency)}
+                      {formatAmount(payment.amount, payment.currency)}
                     </Table.Td>
                     <Table.Td>{payment.creditsAmount}</Table.Td>
                     <Table.Td>
@@ -274,6 +334,105 @@ export function BillingOverviewPage() {
                       </Badge>
                     </Table.Td>
                     <Table.Td>{formatDate(payment.createdAt)}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+      </Stack>
+
+      <Stack gap="sm" className="surface-panel">
+        <Title order={4}>Invoice history</Title>
+
+        {billingInvoicesQuery.isLoading && (
+          <Text size="sm" c="dimmed">
+            Loading invoices...
+          </Text>
+        )}
+
+        {!billingInvoicesQuery.isLoading && invoiceHistory.length === 0 && (
+          <Text size="sm" c="dimmed">
+            No invoices yet.
+          </Text>
+        )}
+
+        {invoiceHistory.length > 0 && (
+          <Table.ScrollContainer minWidth={860}>
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Invoice</Table.Th>
+                  <Table.Th>Period</Table.Th>
+                  <Table.Th>Due</Table.Th>
+                  <Table.Th>Paid</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th ta="right">Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {invoiceHistory.map((invoice) => (
+                  <Table.Tr key={invoice.id}>
+                    <Table.Td>
+                      <Code>
+                        {invoice.invoiceNumber ?? invoice.stripeInvoiceId}
+                      </Code>
+                    </Table.Td>
+                    <Table.Td>
+                      {formatDate(invoice.periodStart)} -{" "}
+                      {formatDate(invoice.periodEnd)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatAmount(invoice.amountDue, invoice.currency)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatAmount(invoice.amountPaid, invoice.currency)}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        variant="light"
+                        color={getStatusColor(invoice.status)}
+                      >
+                        {invoice.status}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" justify="flex-end" wrap="nowrap">
+                        {invoice.hostedInvoiceUrl && (
+                          <Tooltip label="Open hosted invoice">
+                            <ActionIcon
+                              component="a"
+                              href={invoice.hostedInvoiceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              variant="subtle"
+                              aria-label="Open hosted invoice"
+                            >
+                              <IconExternalLink size={18} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {invoice.invoicePdf && (
+                          <Tooltip label="Download invoice PDF">
+                            <ActionIcon
+                              component="a"
+                              href={invoice.invoicePdf}
+                              target="_blank"
+                              rel="noreferrer"
+                              variant="subtle"
+                              aria-label="Download invoice PDF"
+                            >
+                              <IconDownload size={18} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {!invoice.hostedInvoiceUrl && !invoice.invoicePdf && (
+                          <Text size="sm" c="dimmed">
+                            -
+                          </Text>
+                        )}
+                      </Group>
+                    </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>

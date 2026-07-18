@@ -4,4 +4,7 @@ export const billingQueryKeys = {
   payments: () => [...billingQueryKeys.all, "payments"] as const,
   credits: () => [...billingQueryKeys.all, "credits"] as const,
   subscription: () => [...billingQueryKeys.all, "subscription"] as const,
+  invoices: () => [...billingQueryKeys.all, "invoices"] as const,
+  upcomingInvoice: () =>
+    [...billingQueryKeys.all, "invoices", "upcoming"] as const,
 };

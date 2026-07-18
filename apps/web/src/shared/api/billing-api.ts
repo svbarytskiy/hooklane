@@ -1,7 +1,9 @@
 import type {
+  BillingInvoicesResponse,
   BillingPaymentsResponse,
   BillingStateResponse,
   BillingSubscriptionResponse,
+  BillingUpcomingInvoiceResponse,
   CreateBillingPortalResponse,
   CreateCheckoutResponse,
   CreateSubscriptionCheckoutResponse,
@@ -85,9 +87,25 @@ export async function createSubscriptionCheckout(
 
   return response.data;
 }
+
 export async function createBillingPortalSession(): Promise<CreateBillingPortalResponse> {
   const response =
     await apiClient.post<CreateBillingPortalResponse>("/billing/portal");
+
+  return response.data;
+}
+
+export async function getBillingInvoices(): Promise<BillingInvoicesResponse> {
+  const response =
+    await apiClient.get<BillingInvoicesResponse>("/billing/invoices");
+
+  return response.data;
+}
+
+export async function getBillingUpcomingInvoice(): Promise<BillingUpcomingInvoiceResponse> {
+  const response = await apiClient.get<BillingUpcomingInvoiceResponse>(
+    "/billing/invoices/upcoming",
+  );
 
   return response.data;
 }

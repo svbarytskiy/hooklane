@@ -81,6 +81,7 @@ export class SubscriptionCheckoutService {
       {
         mode: 'subscription',
         customer: stripeCustomerId,
+        allow_promotion_codes: true,
         line_items: [
           {
             price: product.stripePriceId,
