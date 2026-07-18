@@ -91,3 +91,7 @@ export type BillingUpcomingInvoice = {
 export type BillingUpcomingInvoiceResponse = {
   invoice: BillingUpcomingInvoice | null;
 };
+
+export type CreateBillingPortalResponse = {
+  portalUrl: string;
+};

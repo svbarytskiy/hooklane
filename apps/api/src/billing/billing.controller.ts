@@ -3,6 +3,7 @@ import type {
   BillingInvoicesResponse,
   BillingSubscriptionResponse,
   BillingUpcomingInvoiceResponse,
+  CreateBillingPortalResponse,
 } from '@billing-lab/contracts';
 import {
   Body,
@@ -106,5 +107,13 @@ export class BillingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<BillingUpcomingInvoiceResponse> {
     return this.invoiceService.getUpcomingInvoice(user.id);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Post('portal')
+  createBillingPortalSession(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CreateBillingPortalResponse> {
+    return this.billingService.createBillingPortalSession(user);
   }
 }

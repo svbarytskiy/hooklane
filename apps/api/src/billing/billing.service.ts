@@ -19,7 +19,10 @@ import type {
   BillingStateResponse,
   CreditsBalanceResponse,
   StripeCustomerResponse,
+  CreateBillingPortalResponse,
 } from '@billing-lab/contracts';
+import { ConfigService } from '@nestjs/config';
+import { Env } from 'src/config/env.schema';
 
 type StripeCustomerRecord = {
   id: string;
@@ -36,6 +39,8 @@ export class BillingService {
 
     @Inject(STRIPE_CLIENT)
     private readonly stripe: StripeClient,
+
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async createCustomer(
@@ -196,5 +201,24 @@ export class BillingService {
       'code' in error &&
       error.code === '23505'
     );
+  }
+
+  async createBillingPortalSession(
+    user: AuthenticatedUser,
+  ): Promise<CreateBillingPortalResponse> {
+    const stripeCustomerId = await this.getOrCreateStripeCustomerId(user);
+
+    const webUrl = this.config.get('WEB_URL', {
+      infer: true,
+    });
+
+    const portalSession = await this.stripe.billingPortal.sessions.create({
+      customer: stripeCustomerId,
+      return_url: `${webUrl}/billing`,
+    });
+
+    return {
+      portalUrl: portalSession.url,
+    };
   }
 }

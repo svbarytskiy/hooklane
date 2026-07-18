@@ -2,6 +2,7 @@ import type {
   BillingPaymentsResponse,
   BillingStateResponse,
   BillingSubscriptionResponse,
+  CreateBillingPortalResponse,
   CreateCheckoutResponse,
   CreateSubscriptionCheckoutResponse,
   CreditsBalanceResponse,
@@ -81,6 +82,12 @@ export async function createSubscriptionCheckout(
       },
     },
   );
+
+  return response.data;
+}
+export async function createBillingPortalSession(): Promise<CreateBillingPortalResponse> {
+  const response =
+    await apiClient.post<CreateBillingPortalResponse>("/billing/portal");
 
   return response.data;
 }

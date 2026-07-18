@@ -16,4 +16,5 @@ export type {
   BillingInvoicesResponse,
   BillingUpcomingInvoice,
   BillingUpcomingInvoiceResponse,
+  CreateBillingPortalResponse,
 } from "./billing.js";

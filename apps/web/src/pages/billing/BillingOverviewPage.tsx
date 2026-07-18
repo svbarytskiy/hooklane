@@ -10,11 +10,16 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconCrown, IconShoppingCart } from "@tabler/icons-react";
+import {
+  IconCreditCard,
+  IconCrown,
+  IconShoppingCart,
+} from "@tabler/icons-react";
 import { useAuthSession } from "../../features/auth/model/use-auth-session";
 import { useBillingPaymentsQuery } from "../../features/billing/api/use-billing-payments-query";
 import { useBillingStateQuery } from "../../features/billing/api/use-billing-state-query";
 import { useBillingSubscriptionQuery } from "../../features/billing/api/use-billing-subscription-query";
+import { useCreateBillingPortalMutation } from "../../features/billing/api/use-create-billing-portal-mutation";
 import { useCreateCreditsCheckoutMutation } from "../../features/billing/api/use-create-credits-checkout-mutation";
 import { useCreateSubscriptionCheckoutMutation } from "../../features/billing/api/use-create-subscription-checkout-mutation";
 import { useCreditsBalanceQuery } from "../../features/billing/api/use-credits-balance-query";
@@ -70,6 +75,7 @@ export function BillingOverviewPage() {
   const creditsBalanceQuery = useCreditsBalanceQuery(isAuthenticated);
   const billingSubscriptionQuery = useBillingSubscriptionQuery(isAuthenticated);
   const createCreditsCheckoutMutation = useCreateCreditsCheckoutMutation();
+  const createBillingPortalMutation = useCreateBillingPortalMutation();
   const createSubscriptionCheckoutMutation =
     useCreateSubscriptionCheckoutMutation();
 
@@ -147,6 +153,15 @@ export function BillingOverviewPage() {
             {hasCurrentSubscription
               ? "Subscription exists"
               : "Subscribe to Pro"}
+          </Button>
+          <Button
+            variant="default"
+            leftSection={<IconCreditCard size={18} />}
+            disabled={!isAuthenticated}
+            loading={createBillingPortalMutation.isPending}
+            onClick={() => createBillingPortalMutation.mutate()}
+          >
+            Manage billing
           </Button>
         </Group>
       </Group>
