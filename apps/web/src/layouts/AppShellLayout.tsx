@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuthSession } from "../features/auth/model/use-auth-session";
+import { useBillingRealtimeSync } from "../features/billing/realtime/use-billing-realtime-sync";
 import { useMyProfileQuery } from "../features/profiles/api/use-my-profile-query";
 
 const navItems = [
@@ -28,7 +29,8 @@ const navItems = [
 
 export function AppShellLayout() {
   const location = useLocation();
-  const { accessToken } = useAuthSession();
+  const { accessToken, user } = useAuthSession();
+  useBillingRealtimeSync(user?.id);
   const profileQuery = useMyProfileQuery(Boolean(accessToken));
   const visibleNavItems =
     profileQuery.data?.role === "admin"
