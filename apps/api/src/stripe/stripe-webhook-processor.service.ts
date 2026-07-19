@@ -17,6 +17,7 @@ import {
 import { STRIPE_CLIENT } from './stripe.tokens';
 import type { StripeClient } from './stripe.types';
 import { InvoiceSyncService } from './invoice-sync.service';
+import { RefundService } from './refund.service';
 
 @Injectable()
 export class StripeWebhookProcessor {
@@ -28,6 +29,7 @@ export class StripeWebhookProcessor {
     private readonly stripe: StripeClient,
 
     private readonly invoiceSyncService: InvoiceSyncService,
+    private readonly refundService: RefundService,
   ) {}
 
   async process(event: Stripe.Event): Promise<'processed' | 'ignored'> {
@@ -115,6 +117,13 @@ export class StripeWebhookProcessor {
           await this.handleSubscriptionChanged(stripeSubscriptionId);
         }
 
+        return 'processed';
+      }
+
+      case 'refund.created':
+      case 'refund.updated':
+      case 'refund.failed': {
+        await this.refundService.syncRefund(event.data.object);
         return 'processed';
       }
       default:

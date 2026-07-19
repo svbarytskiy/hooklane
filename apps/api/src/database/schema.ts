@@ -112,6 +112,10 @@ export const creditTransactions = pgTable(
       onDelete: 'set null',
     }),
 
+    refundId: uuid('refund_id').references(() => refunds.id, {
+      onDelete: 'set null',
+    }),
+
     amount: integer('amount').notNull(),
 
     type: text('type').notNull(),
@@ -128,6 +132,10 @@ export const creditTransactions = pgTable(
     paymentIdIdx: index('credit_transactions_payment_id_idx').on(
       table.paymentId,
     ),
+
+    refundIdUnique: uniqueIndex('credit_transactions_refund_id_unique')
+      .on(table.refundId)
+      .where(sql`${table.refundId} is not null`),
 
     purchasePaymentUnique: uniqueIndex(
       'credit_transactions_purchase_payment_unique',
@@ -375,6 +383,93 @@ export const invoices = pgTable(
     statusAllowed: check(
       'invoices_status_allowed',
       sql`${table.status} in ('draft', 'open', 'paid', 'uncollectible', 'void')`,
+    ),
+  }),
+);
+
+export const refunds = pgTable(
+  'refunds',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+
+    paymentId: uuid('payment_id').references(() => payments.id, {
+      onDelete: 'cascade',
+    }),
+
+    invoiceId: uuid('invoice_id').references(() => invoices.id, {
+      onDelete: 'cascade',
+    }),
+
+    stripeRefundId: text('stripe_refund_id').notNull().unique(),
+
+    stripeChargeId: text('stripe_charge_id'),
+
+    stripePaymentIntentId: text('stripe_payment_intent_id'),
+
+    amount: integer('amount').notNull(),
+
+    currency: text('currency').notNull(),
+
+    status: text('status').notNull(),
+
+    reason: text('reason'),
+
+    failureReason: text('failure_reason'),
+
+    stripeCreatedAt: timestamp('stripe_created_at', {
+      withTimezone: true,
+    }).notNull(),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdCreatedAtIdx: index('refunds_user_id_created_at_idx').on(
+      table.userId,
+      table.createdAt.desc(),
+    ),
+
+    paymentIdIdx: index('refunds_payment_id_idx')
+      .on(table.paymentId)
+      .where(sql`${table.paymentId} is not null`),
+
+    invoiceIdIdx: index('refunds_invoice_id_idx')
+      .on(table.invoiceId)
+      .where(sql`${table.invoiceId} is not null`),
+
+    statusIdx: index('refunds_status_idx').on(table.status),
+
+    stripePaymentIntentIdIdx: index('refunds_stripe_payment_intent_id_idx')
+      .on(table.stripePaymentIntentId)
+      .where(sql`${table.stripePaymentIntentId} is not null`),
+
+    amountPositive: check('refunds_amount_positive', sql`${table.amount} > 0`),
+
+    statusAllowed: check(
+      'refunds_status_allowed',
+      sql`${table.status} in ('pending', 'requires_action', 'succeeded', 'failed', 'canceled')`,
+    ),
+
+    exactlyOneSource: check(
+      'refunds_exactly_one_source',
+      sql`(
+        (${table.paymentId} is not null and ${table.invoiceId} is null)
+        or
+        (${table.paymentId} is null and ${table.invoiceId} is not null)
+      )`,
     ),
   }),
 );

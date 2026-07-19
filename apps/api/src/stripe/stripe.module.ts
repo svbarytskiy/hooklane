@@ -8,6 +8,7 @@ import { StripeWebhookService } from './stripe-webhook.service';
 import { DatabaseModule } from 'src/database/database.module';
 import { StripeWebhookProcessor } from './stripe-webhook-processor.service';
 import { InvoiceSyncService } from './invoice-sync.service';
+import { RefundService } from './refund.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -27,7 +28,8 @@ import { InvoiceSyncService } from './invoice-sync.service';
     StripeWebhookService,
     StripeWebhookProcessor,
     InvoiceSyncService,
+    RefundService,
   ],
-  exports: [STRIPE_CLIENT, StripeWebhookService],
+  exports: [STRIPE_CLIENT, StripeWebhookService, RefundService],
 })
 export class StripeModule {}
