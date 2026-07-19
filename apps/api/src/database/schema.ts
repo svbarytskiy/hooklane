@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -470,6 +471,43 @@ export const refunds = pgTable(
         or
         (${table.paymentId} is null and ${table.invoiceId} is not null)
       )`,
+    ),
+  }),
+);
+
+export const profileAvatars = pgTable(
+  'profile_avatars',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    bucketId: text('bucket_id').notNull().default('avatars'),
+    objectPath: text('object_path').notNull().unique(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    bucketAllowed: check(
+      'profile_avatars_bucket_allowed',
+      sql`${table.bucketId} = 'avatars'`,
+    ),
+    mimeTypeAllowed: check(
+      'profile_avatars_mime_type_allowed',
+      sql`${table.mimeType} in ('image/jpeg', 'image/png', 'image/webp')`,
+    ),
+    sizeAllowed: check(
+      'profile_avatars_size_allowed',
+      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 5242880`,
+    ),
+    pathOwned: check(
+      'profile_avatars_path_owned',
+      sql`${table.objectPath} like ${table.userId}::text || '/%'`,
     ),
   }),
 );

@@ -7,35 +7,44 @@
   Text,
   ThemeIcon,
   Title,
-} from '@mantine/core';
-import { IconDatabase, IconKey, IconServer2, IconUserCircle } from '@tabler/icons-react';
-import { getApiErrorMessage } from '../../shared/api/api-error';
-import { useAuthSession } from '../../features/auth/model/use-auth-session';
-import { useMyProfileQuery } from '../../features/profiles/api/use-my-profile-query';
+} from "@mantine/core";
+import {
+  IconDatabase,
+  IconKey,
+  IconServer2,
+  IconUserCircle,
+} from "@tabler/icons-react";
+import { getApiErrorMessage } from "../../shared/api/api-error";
+import { useAuthSession } from "../../features/auth/model/use-auth-session";
+import { ProfileAvatarPanel } from "../../features/profile-avatar/ui/ProfileAvatarPanel";
+import { useMyProfileQuery } from "../../features/profiles/api/use-my-profile-query";
 
 const items = [
   {
-    title: 'API shell',
-    description: 'Nest backend has config, Supabase client provider, auth guard, and Drizzle DB provider.',
+    title: "API shell",
+    description:
+      "Nest backend has config, Supabase client provider, auth guard, and Drizzle DB provider.",
     icon: IconServer2,
-    status: 'Ready',
+    status: "Ready",
   },
   {
-    title: 'Auth flow',
-    description: 'Supabase browser auth sends bearer tokens to protected Nest endpoints.',
+    title: "Auth flow",
+    description:
+      "Supabase browser auth sends bearer tokens to protected Nest endpoints.",
     icon: IconKey,
-    status: 'Ready',
+    status: "Ready",
   },
   {
-    title: 'Database',
-    description: 'Supabase migrations own schema; Drizzle is used as the typed query layer.',
+    title: "Database",
+    description:
+      "Supabase migrations own schema; Drizzle is used as the typed query layer.",
     icon: IconDatabase,
-    status: 'In progress',
+    status: "In progress",
   },
 ];
 
 export function DashboardPage() {
-  const { accessToken } = useAuthSession();
+  const { accessToken, user } = useAuthSession();
   const profileQuery = useMyProfileQuery(Boolean(accessToken));
 
   return (
@@ -84,16 +93,26 @@ export function DashboardPage() {
           </div>
         </Group>
 
-        {!accessToken && <Text size="sm">Sign in on the Auth page to load your profile.</Text>}
+        {user && (
+          <ProfileAvatarPanel
+            userId={user.id}
+            label={profileQuery.data?.email ?? user.email ?? user.id}
+          />
+        )}
+
+        {!accessToken && (
+          <Text size="sm">Sign in on the Auth page to load your profile.</Text>
+        )}
         {profileQuery.isLoading && <Text size="sm">Loading profile...</Text>}
         {profileQuery.isError && (
           <Text size="sm" c="red">
             {getApiErrorMessage(profileQuery.error)}
           </Text>
         )}
-        {profileQuery.data && <Code block>{JSON.stringify(profileQuery.data, null, 2)}</Code>}
+        {profileQuery.data && (
+          <Code block>{JSON.stringify(profileQuery.data, null, 2)}</Code>
+        )}
       </Stack>
     </Stack>
   );
 }
-
