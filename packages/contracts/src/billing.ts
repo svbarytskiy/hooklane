@@ -95,3 +95,36 @@ export type BillingUpcomingInvoiceResponse = {
 export type CreateBillingPortalResponse = {
   portalUrl: string;
 };
+
+export type CreateRefundRequest = {
+  amount?: number;
+};
+
+export type CreateRefundResponse = {
+  refundId: string;
+  amount: number;
+  currency: string;
+  status: string | null;
+};
+
+export type AdminRefund = {
+  id: string;
+  userId: string;
+  paymentId: string | null;
+  invoiceId: string | null;
+  stripeRefundId: string;
+  stripeChargeId: string | null;
+  stripePaymentIntentId: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  reason: string | null;
+  failureReason: string | null;
+  stripeCreatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminRefundsResponse = {
+  refunds: AdminRefund[];
+};

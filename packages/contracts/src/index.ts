@@ -17,4 +17,8 @@ export type {
   BillingUpcomingInvoice,
   BillingUpcomingInvoiceResponse,
   CreateBillingPortalResponse,
+  CreateRefundRequest,
+  CreateRefundResponse,
+  AdminRefund,
+  AdminRefundsResponse,
 } from "./billing.js";

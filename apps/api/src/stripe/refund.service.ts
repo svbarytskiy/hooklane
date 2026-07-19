@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type Stripe from 'stripe';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, desc, sql } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import {
@@ -17,6 +17,10 @@ import {
 } from 'src/database/schema';
 import { STRIPE_CLIENT } from './stripe.tokens';
 import type { StripeClient } from './stripe.types';
+import type {
+  AdminRefundsResponse,
+  CreateRefundResponse,
+} from '@billing-lab/contracts';
 
 type PaymentRefundSource = {
   type: 'payment';
@@ -298,6 +302,181 @@ export class RefundService {
       type: 'refund',
       description: `Stripe refund ${stripeRefundId}`,
     });
+  }
+
+  async createPaymentRefund(
+    paymentId: string,
+    amount: number | undefined,
+    idempotencyKey: string | undefined,
+  ): Promise<CreateRefundResponse> {
+    if (!idempotencyKey?.trim()) {
+      throw new ConflictException('Idempotency-Key header is required');
+    }
+
+    const [payment] = await this.db
+      .select({
+        id: payments.id,
+        amount: payments.amount,
+        status: payments.status,
+        stripePaymentIntentId: payments.stripePaymentIntentId,
+      })
+      .from(payments)
+      .where(eq(payments.id, paymentId))
+      .limit(1);
+
+    if (!payment) {
+      throw new NotFoundException(`Payment ${paymentId} was not found`);
+    }
+
+    if (payment.status !== 'paid') {
+      throw new ConflictException(`Payment ${paymentId} is not paid`);
+    }
+
+    if (!payment.stripePaymentIntentId) {
+      throw new ConflictException(`Payment ${paymentId} has no PaymentIntent`);
+    }
+
+    if (amount !== undefined && amount > payment.amount) {
+      throw new ConflictException('Refund amount exceeds payment amount');
+    }
+
+    const refund = await this.stripe.refunds.create(
+      {
+        payment_intent: payment.stripePaymentIntentId,
+        amount,
+        reason: 'requested_by_customer',
+        metadata: {
+          paymentId: payment.id,
+        },
+      },
+      {
+        idempotencyKey: `payment-refund:${payment.id}:${idempotencyKey}`,
+      },
+    );
+
+    await this.syncRefund(refund);
+
+    return {
+      refundId: refund.id,
+      amount: refund.amount,
+      currency: refund.currency,
+      status: refund.status,
+    };
+  }
+
+  async getRefunds(): Promise<AdminRefundsResponse> {
+    const refundRecords = await this.db
+      .select({
+        id: refunds.id,
+        userId: refunds.userId,
+        paymentId: refunds.paymentId,
+        invoiceId: refunds.invoiceId,
+        stripeRefundId: refunds.stripeRefundId,
+        stripeChargeId: refunds.stripeChargeId,
+        stripePaymentIntentId: refunds.stripePaymentIntentId,
+        amount: refunds.amount,
+        currency: refunds.currency,
+        status: refunds.status,
+        reason: refunds.reason,
+        failureReason: refunds.failureReason,
+        stripeCreatedAt: refunds.stripeCreatedAt,
+        createdAt: refunds.createdAt,
+        updatedAt: refunds.updatedAt,
+      })
+      .from(refunds)
+      .orderBy(desc(refunds.createdAt))
+      .limit(100);
+
+    return {
+      refunds: refundRecords.map((refund) => ({
+        ...refund,
+        stripeCreatedAt: refund.stripeCreatedAt.toISOString(),
+        createdAt: refund.createdAt.toISOString(),
+        updatedAt: refund.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  async createInvoiceRefund(
+    invoiceId: string,
+    amount: number | undefined,
+    idempotencyKey: string | undefined,
+  ): Promise<CreateRefundResponse> {
+    if (!idempotencyKey?.trim()) {
+      throw new ConflictException('Idempotency-Key header is required');
+    }
+
+    const [invoice] = await this.db
+      .select({
+        id: invoices.id,
+        stripeInvoiceId: invoices.stripeInvoiceId,
+        status: invoices.status,
+        amountPaid: invoices.amountPaid,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1);
+
+    if (!invoice) {
+      throw new NotFoundException(`Invoice ${invoiceId} was not found`);
+    }
+
+    if (invoice.status !== 'paid' || invoice.amountPaid <= 0) {
+      throw new ConflictException(`Invoice ${invoiceId} is not paid`);
+    }
+
+    if (amount !== undefined && amount > invoice.amountPaid) {
+      throw new ConflictException('Refund amount exceeds invoice paid amount');
+    }
+
+    const invoicePayments = await this.stripe.invoicePayments.list({
+      invoice: invoice.stripeInvoiceId,
+      status: 'paid',
+      limit: 2,
+    });
+
+    const paymentIntentPayments = invoicePayments.data.filter(
+      (invoicePayment) =>
+        invoicePayment.payment.type === 'payment_intent' &&
+        Boolean(invoicePayment.payment.payment_intent),
+    );
+
+    if (paymentIntentPayments.length !== 1) {
+      throw new ConflictException(
+        `Invoice ${invoiceId} must have exactly one paid PaymentIntent`,
+      );
+    }
+
+    const paymentIntent = paymentIntentPayments[0]?.payment.payment_intent;
+
+    if (!paymentIntent) {
+      throw new ConflictException(`Invoice ${invoiceId} has no PaymentIntent`);
+    }
+
+    const stripePaymentIntentId = this.getStripeResourceId(paymentIntent);
+
+    const refund = await this.stripe.refunds.create(
+      {
+        payment_intent: stripePaymentIntentId,
+        amount,
+        reason: 'requested_by_customer',
+        metadata: {
+          invoiceId: invoice.id,
+        },
+      },
+      {
+        idempotencyKey: `invoice-refund:${invoice.id}:${idempotencyKey.trim()}`,
+      },
+    );
+
+    await this.syncRefund(refund);
+
+    return {
+      refundId: refund.id,
+      amount: refund.amount,
+      currency: refund.currency,
+      status: refund.status,
+    };
   }
 
   private getStripeResourceId(resource: string | { id: string }): string {

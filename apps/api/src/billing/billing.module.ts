@@ -9,10 +9,11 @@ import { CheckoutService } from './checkout.service';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { InvoiceService } from './invoice.service';
+import { AdminBillingController } from './admin-billing.controller';
 
 @Module({
   imports: [DatabaseModule, StripeModule, AuthModule],
-  controllers: [BillingController],
+  controllers: [BillingController, AdminBillingController],
   providers: [
     BillingService,
     BillingCatalogService,
