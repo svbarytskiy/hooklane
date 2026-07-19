@@ -13,6 +13,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconAlertTriangle,
   IconCreditCard,
   IconDownload,
   IconExternalLink,
@@ -39,6 +40,32 @@ const CURRENT_SUBSCRIPTION_STATUSES = new Set([
   "unpaid",
   "paused",
 ]);
+
+const PAYMENT_RECOVERY_COPY: Record<
+  string,
+  { title: string; message: string }
+> = {
+  incomplete: {
+    title: "Payment confirmation required",
+    message:
+      "Complete the open invoice to activate your subscription. Your bank may require 3D Secure confirmation.",
+  },
+  past_due: {
+    title: "Subscription payment is past due",
+    message:
+      "A renewal payment failed or needs confirmation. Pay the open invoice or update your payment method.",
+  },
+  unpaid: {
+    title: "Subscription payment is unpaid",
+    message:
+      "Automatic payment attempts have stopped. Pay the open invoice or update your payment method to restore access.",
+  },
+  paused: {
+    title: "Subscription is paused",
+    message:
+      "Add a valid payment method in the billing portal before resuming the subscription.",
+  },
+};
 
 function formatAmount(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, {
@@ -95,6 +122,12 @@ export function BillingOverviewPage() {
   const subscription = billingSubscriptionQuery.data?.subscription ?? null;
   const hasCurrentSubscription = Boolean(
     subscription && CURRENT_SUBSCRIPTION_STATUSES.has(subscription.status),
+  );
+  const paymentRecovery = subscription
+    ? PAYMENT_RECOVERY_COPY[subscription.status]
+    : undefined;
+  const openInvoice = invoiceHistory.find(
+    (invoice) => invoice.status === "open" && invoice.hostedInvoiceUrl,
   );
 
   const rows = [
@@ -186,6 +219,39 @@ export function BillingOverviewPage() {
       {isAuthenticated && billingError && (
         <Alert color="red" title="Billing data could not be loaded">
           {getApiErrorMessage(billingError)}
+        </Alert>
+      )}
+
+      {isAuthenticated && paymentRecovery && (
+        <Alert
+          color="orange"
+          icon={<IconAlertTriangle size={18} />}
+          title={paymentRecovery.title}
+        >
+          <Stack gap="sm">
+            <Text size="sm">{paymentRecovery.message}</Text>
+            <Group gap="sm">
+              {openInvoice?.hostedInvoiceUrl && (
+                <Button
+                  component="a"
+                  href={openInvoice.hostedInvoiceUrl}
+                  size="xs"
+                  leftSection={<IconExternalLink size={16} />}
+                >
+                  Open invoice
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="default"
+                leftSection={<IconCreditCard size={16} />}
+                loading={createBillingPortalMutation.isPending}
+                onClick={() => createBillingPortalMutation.mutate()}
+              >
+                Manage payment method
+              </Button>
+            </Group>
+          </Stack>
         </Alert>
       )}
 

@@ -8,28 +8,44 @@
   Text,
   ThemeIcon,
   Title,
-} from '@mantine/core';
+} from "@mantine/core";
 import {
   IconCreditCard,
   IconHome,
   IconLogin2,
+  IconShieldDollar,
   IconSettingsAutomation,
-} from '@tabler/icons-react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+} from "@tabler/icons-react";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { useAuthSession } from "../features/auth/model/use-auth-session";
+import { useMyProfileQuery } from "../features/profiles/api/use-my-profile-query";
 
 const navItems = [
-  { label: 'Dashboard', to: '/dashboard', icon: IconHome },
-  { label: 'Auth', to: '/auth', icon: IconLogin2 },
-  { label: 'Billing', to: '/billing', icon: IconCreditCard },
+  { label: "Dashboard", to: "/dashboard", icon: IconHome },
+  { label: "Auth", to: "/auth", icon: IconLogin2 },
+  { label: "Billing", to: "/billing", icon: IconCreditCard },
 ];
 
 export function AppShellLayout() {
   const location = useLocation();
+  const { accessToken } = useAuthSession();
+  const profileQuery = useMyProfileQuery(Boolean(accessToken));
+  const visibleNavItems =
+    profileQuery.data?.role === "admin"
+      ? [
+          ...navItems,
+          {
+            label: "Admin billing",
+            to: "/admin/billing",
+            icon: IconShieldDollar,
+          },
+        ]
+      : navItems;
 
   return (
     <AppShell
       header={{ height: 64 }}
-      navbar={{ width: 260, breakpoint: 'sm' }}
+      navbar={{ width: 260, breakpoint: "sm" }}
       padding="md"
     >
       <AppShell.Header>
@@ -55,7 +71,7 @@ export function AppShellLayout() {
 
       <AppShell.Navbar p="md">
         <Stack gap={4}>
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <MantineNavLink

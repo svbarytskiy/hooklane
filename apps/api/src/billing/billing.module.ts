@@ -10,6 +10,7 @@ import { SubscriptionService } from './subscription.service';
 import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { InvoiceService } from './invoice.service';
 import { AdminBillingController } from './admin-billing.controller';
+import { AdminBillingService } from './admin-billing.service';
 
 @Module({
   imports: [DatabaseModule, StripeModule, AuthModule],
@@ -21,6 +22,7 @@ import { AdminBillingController } from './admin-billing.controller';
     SubscriptionService,
     SubscriptionCheckoutService,
     InvoiceService,
+    AdminBillingService,
   ],
   exports: [SubscriptionService],
 })

@@ -128,3 +128,47 @@ export type AdminRefund = {
 export type AdminRefundsResponse = {
   refunds: AdminRefund[];
 };
+
+export type PaginationMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type AdminPayment = {
+  id: string;
+  userId: string;
+  productType: string;
+  amount: number;
+  currency: string;
+  creditsAmount: number;
+  status: string;
+  stripePaymentIntentId: string | null;
+  createdAt: string;
+};
+
+export type AdminPaymentsResponse = {
+  payments: AdminPayment[];
+  pagination: PaginationMeta;
+};
+
+export type AdminInvoice = {
+  id: string;
+  userId: string;
+  stripeInvoiceId: string;
+  invoiceNumber: string | null;
+  status: string;
+  currency: string;
+  amountDue: number;
+  amountPaid: number;
+  hostedInvoiceUrl: string | null;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+};
+
+export type AdminInvoicesResponse = {
+  invoices: AdminInvoice[];
+  pagination: PaginationMeta;
+};

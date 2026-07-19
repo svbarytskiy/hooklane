@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShellLayout } from "../layouts/AppShellLayout";
+import { AdminBillingPage } from "../pages/admin/AdminBillingPage";
 import { AuthPage } from "../pages/auth/AuthPage";
 import { BillingCheckoutCancelPage } from "../pages/billing/BillingCheckoutCancelPage";
 import { BillingCheckoutSuccessPage } from "../pages/billing/BillingCheckoutSuccessPage";
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { path: "dashboard", element: <DashboardPage /> },
       { path: "auth", element: <AuthPage /> },
       { path: "billing", element: <BillingOverviewPage /> },
+      { path: "admin/billing", element: <AdminBillingPage /> },
       { path: "billing/success", element: <BillingCheckoutSuccessPage /> },
       { path: "billing/cancel", element: <BillingCheckoutCancelPage /> },
       {

@@ -106,7 +106,8 @@ export class StripeWebhookProcessor {
       }
 
       case 'invoice.payment_succeeded':
-      case 'invoice.payment_failed': {
+      case 'invoice.payment_failed':
+      case 'invoice.payment_action_required': {
         const invoice = event.data.object;
 
         await this.invoiceSyncService.syncInvoice(invoice);
