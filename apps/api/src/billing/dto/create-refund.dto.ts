@@ -1,4 +1,4 @@
-import type { CreateRefundRequest } from '@billing-lab/contracts';
+import type { CreateRefundRequest } from '@hooklane/contracts';
 import { IsInt, IsOptional, Min } from 'class-validator';
 
 export class CreateRefundDto implements CreateRefundRequest {

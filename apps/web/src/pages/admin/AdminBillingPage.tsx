@@ -2,7 +2,7 @@ import type {
   AdminInvoice,
   AdminPayment,
   AdminRefund,
-} from "@billing-lab/contracts";
+} from "@hooklane/contracts";
 import {
   Alert,
   Badge,

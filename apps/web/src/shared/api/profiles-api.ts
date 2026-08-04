@@ -1,4 +1,4 @@
-﻿import type { ProfileResponse } from '@billing-lab/contracts';
+import type { ProfileResponse } from '@hooklane/contracts';
 import { apiClient } from './api-client';
 
 export async function getMyProfile(): Promise<ProfileResponse> {

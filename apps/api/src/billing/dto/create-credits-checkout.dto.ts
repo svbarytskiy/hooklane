@@ -1,4 +1,4 @@
-import type { CreateCreditsCheckoutRequest } from '@billing-lab/contracts';
+import type { CreateCreditsCheckoutRequest } from '@hooklane/contracts';
 import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreateCreditsCheckoutDto implements CreateCreditsCheckoutRequest {

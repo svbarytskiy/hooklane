@@ -20,7 +20,7 @@ import type {
   CreditsBalanceResponse,
   StripeCustomerResponse,
   CreateBillingPortalResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { ConfigService } from '@nestjs/config';
 import { Env } from 'src/config/env.schema';
 

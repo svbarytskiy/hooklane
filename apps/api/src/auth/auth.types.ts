@@ -1,1 +1,1 @@
-﻿export type { AuthenticatedUser } from '@billing-lab/contracts';
+export type { AuthenticatedUser } from '@hooklane/contracts';

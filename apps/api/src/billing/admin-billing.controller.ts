@@ -18,7 +18,7 @@ import {
   AdminPaymentsResponse,
   AdminRefundsResponse,
   CreateRefundResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { AdminBillingService } from './admin-billing.service';
 import { AdminListQueryDto } from './dto/admin-list-query.dto';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@billing-lab/contracts",
+  "name": "@hooklane/contracts",
   "version": "1.0.0",
   "description": "",
   "main": "./src/index.ts",

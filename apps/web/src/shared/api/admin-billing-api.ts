@@ -3,7 +3,7 @@ import type {
   AdminPaymentsResponse,
   AdminRefundsResponse,
   CreateRefundResponse,
-} from "@billing-lab/contracts";
+} from "@hooklane/contracts";
 import { apiClient } from "./api-client";
 
 export type AdminListParams = {

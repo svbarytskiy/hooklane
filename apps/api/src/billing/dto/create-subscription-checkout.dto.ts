@@ -1,4 +1,4 @@
-import type { CreateSubscriptionCheckoutRequest } from '@billing-lab/contracts';
+import type { CreateSubscriptionCheckoutRequest } from '@hooklane/contracts';
 import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreateSubscriptionCheckoutDto implements CreateSubscriptionCheckoutRequest {

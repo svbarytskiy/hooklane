@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import type {
   AuthenticatedUser,
   CreateCheckoutResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import { payments } from 'src/database/schema';

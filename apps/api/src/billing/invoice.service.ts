@@ -1,7 +1,7 @@
 import type {
   BillingInvoicesResponse,
   BillingUpcomingInvoiceResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { STRIPE_CLIENT } from 'src/stripe/stripe.tokens';
 import type { StripeClient } from 'src/stripe/stripe.types';
 import { SubscriptionService } from './subscription.service';

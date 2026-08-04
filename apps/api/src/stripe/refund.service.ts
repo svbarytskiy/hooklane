@@ -20,7 +20,7 @@ import type { StripeClient } from './stripe.types';
 import type {
   AdminRefundsResponse,
   CreateRefundResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 
 type PaymentRefundSource = {
   type: 'payment';

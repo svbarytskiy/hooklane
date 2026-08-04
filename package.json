@@ -1,7 +1,7 @@
 {
-  "name": "billing-lab",
+  "name": "hooklane",
   "version": "1.0.0",
-  "description": "7-day Stripe + Supabase Integration Lab for learning production-like billing flows.",
+  "description": "Production-oriented webhook and workflow automation platform.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

@@ -9,7 +9,7 @@ import type {
   CreateSubscriptionCheckoutResponse,
   CreditsBalanceResponse,
   StripeCustomerResponse,
-} from "@billing-lab/contracts";
+} from "@hooklane/contracts";
 import { apiClient } from "./api-client";
 
 export type CreateCheckoutInput = {

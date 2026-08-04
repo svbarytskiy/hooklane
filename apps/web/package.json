@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@billing-lab/contracts": "1.0.0",
+    "@hooklane/contracts": "1.0.0",
     "@mantine/core": "^9.4.1",
     "@mantine/form": "^9.4.1",
     "@mantine/hooks": "^9.4.1",

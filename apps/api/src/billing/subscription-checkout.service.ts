@@ -15,7 +15,7 @@ import { SubscriptionService } from './subscription.service';
 import {
   AuthenticatedUser,
   CreateSubscriptionCheckoutResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { CreateSubscriptionCheckoutDto } from './dto/create-subscription-checkout.dto';
 
 @Injectable()

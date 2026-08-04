@@ -3,7 +3,7 @@ import { desc, eq, and, inArray } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import { subscriptions } from 'src/database/schema';
-import type { BillingSubscriptionResponse } from '@billing-lab/contracts';
+import type { BillingSubscriptionResponse } from '@hooklane/contracts';
 
 const CURRENT_SUBSCRIPTION_STATUSES = [
   'incomplete',

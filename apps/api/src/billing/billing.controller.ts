@@ -4,7 +4,7 @@ import type {
   BillingSubscriptionResponse,
   BillingUpcomingInvoiceResponse,
   CreateBillingPortalResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import {
   Body,
   Controller,

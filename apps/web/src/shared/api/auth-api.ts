@@ -1,4 +1,4 @@
-﻿import type { AuthMeResponse } from '@billing-lab/contracts';
+import type { AuthMeResponse } from '@hooklane/contracts';
 import { apiClient } from './api-client';
 
 export async function getCurrentUser(): Promise<AuthMeResponse> {

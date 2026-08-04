@@ -1,7 +1,7 @@
 import type {
   AdminInvoicesResponse,
   AdminPaymentsResponse,
-} from '@billing-lab/contracts';
+} from '@hooklane/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { count, desc } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
