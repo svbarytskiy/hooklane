@@ -1,18 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
+import type { AuthenticatedUser } from './auth.types';
 
 describe('AuthController', () => {
-  let controller: AuthController;
+  it('returns the authenticated user supplied by the guard', () => {
+    const controller = new AuthController();
+    const user: AuthenticatedUser = { id: 'user_1', email: 'user@example.com' };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
-    }).compile();
-
-    controller = module.get<AuthController>(AuthController);
-  });
-
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(controller.getMe(user)).toEqual(user);
   });
 });
