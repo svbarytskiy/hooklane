@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { SUPABASE_ADMIN_CLIENT } from './supabase/supabase.tokens';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -8,15 +8,31 @@ describe('AppController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        {
+          provide: SUPABASE_ADMIN_CLIENT,
+          useValue: {
+            from: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          },
+        },
+      ],
     }).compile();
 
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  it('returns a healthy application status', () => {
+    expect(appController.getHealth()).toEqual({ status: 'ok' });
+  });
+
+  it('returns a healthy Supabase status when the query succeeds', async () => {
+    await expect(appController.getSupabaseHealth()).resolves.toEqual({
+      status: 'ok',
+      error: null,
     });
   });
 });
