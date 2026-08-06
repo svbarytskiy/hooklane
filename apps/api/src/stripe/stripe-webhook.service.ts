@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type Stripe from 'stripe';
@@ -24,6 +25,8 @@ type StoredWebhookEvent = {
 
 @Injectable()
 export class StripeWebhookService {
+  private readonly logger = new Logger(StripeWebhookService.name);
+
   constructor(
     @Inject(STRIPE_CLIENT)
     private readonly stripe: StripeClient,
@@ -75,6 +78,27 @@ export class StripeWebhookService {
         status: storedEvent.status as StripeWebhookEventStatus,
       };
     } catch (error) {
+      const cause =
+        typeof error === 'object' && error !== null && 'cause' in error
+          ? ((error as { cause?: unknown }).cause ?? error)
+          : error;
+      const databaseError = cause as {
+        code?: string;
+        detail?: string;
+        constraint?: string;
+        hint?: string;
+      };
+
+      this.logger.error(
+        `Stripe webhook database error: ${JSON.stringify({
+          code: databaseError.code,
+          detail: databaseError.detail,
+          constraint: databaseError.constraint,
+          hint: databaseError.hint,
+          message: cause instanceof Error ? cause.message : String(cause),
+        })}`,
+      );
+
       if (!this.isUniqueViolation(error)) {
         throw error;
       }
