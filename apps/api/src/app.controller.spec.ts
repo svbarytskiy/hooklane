@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { SUPABASE_ADMIN_CLIENT } from './supabase/supabase.tokens';
+import { RedisService } from './redis/redis.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -19,6 +20,12 @@ describe('AppController', () => {
             }),
           },
         },
+        {
+          provide: RedisService,
+          useValue: {
+            ping: jest.fn().mockResolvedValue('PONG'),
+          },
+        },
       ],
     }).compile();
 
@@ -33,6 +40,13 @@ describe('AppController', () => {
     await expect(appController.getSupabaseHealth()).resolves.toEqual({
       status: 'ok',
       error: null,
+    });
+  });
+
+  it('returns a healthy Redis status when ping succeeds', async () => {
+    await expect(appController.getRedisHealth()).resolves.toEqual({
+      status: 'ok',
+      redis: 'PONG',
     });
   });
 });
