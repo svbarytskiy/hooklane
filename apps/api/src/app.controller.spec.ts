@@ -49,4 +49,25 @@ describe('AppController', () => {
       redis: 'PONG',
     });
   });
+
+  it('returns ready when Supabase and Redis are available', async () => {
+    await expect(appController.getReadiness()).resolves.toEqual({
+      status: 'ok',
+      checks: {
+        supabase: { status: 'ok' },
+        redis: { status: 'ok' },
+      },
+    });
+  });
+
+  it('fails readiness when Redis is unavailable', async () => {
+    const redis = appController['redis'] as unknown as {
+      ping: jest.Mock;
+    };
+    redis.ping.mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await expect(appController.getReadiness()).rejects.toMatchObject({
+      status: 503,
+    });
+  });
 });
