@@ -14,6 +14,7 @@ export const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
   DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().url(),
 
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),

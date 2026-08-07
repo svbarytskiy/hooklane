@@ -11,6 +11,7 @@ import { BillingModule } from './billing/billing.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 import { PremiumModule } from './premium/premium.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PremiumModule } from './premium/premium.module';
     StripeModule,
     BillingModule,
     PremiumModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],
