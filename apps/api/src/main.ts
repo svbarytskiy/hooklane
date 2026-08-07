@@ -9,6 +9,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });
+  app.enableShutdownHooks();
   app.useGlobalFilters(new HttpExceptionFilter());
   const config = app.get(ConfigService<Env, true>);
   const webUrl = config.get('WEB_URL', { infer: true });
