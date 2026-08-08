@@ -2,6 +2,7 @@
   AppShell,
   Badge,
   Box,
+  Divider,
   Group,
   NavLink as MantineNavLink,
   Stack,
@@ -11,6 +12,7 @@
 } from "@mantine/core";
 import {
   IconCreditCard,
+  IconBuilding,
   IconHome,
   IconLogin2,
   IconShieldDollar,
@@ -20,9 +22,11 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuthSession } from "../features/auth/model/use-auth-session";
 import { useBillingRealtimeSync } from "../features/billing/realtime/use-billing-realtime-sync";
 import { useMyProfileQuery } from "../features/profiles/api/use-my-profile-query";
+import { WorkspaceSelector } from "../features/workspaces/ui/WorkspaceSelector";
 
 const navItems = [
   { label: "Dashboard", to: "/dashboard", icon: IconHome },
+  { label: "Workspaces", to: "/workspaces", icon: IconBuilding },
   { label: "Auth", to: "/auth", icon: IconLogin2 },
   { label: "Billing", to: "/billing", icon: IconCreditCard },
 ];
@@ -73,6 +77,8 @@ export function AppShellLayout() {
 
       <AppShell.Navbar p="md">
         <Stack gap={4}>
+          <WorkspaceSelector />
+          <Divider my="xs" />
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (

@@ -27,3 +27,4 @@ export type {
   AdminInvoice,
   AdminInvoicesResponse,
 } from "./billing.js";
+export * from "./workspaces.js";

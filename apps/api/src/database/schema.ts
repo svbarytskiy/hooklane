@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -508,6 +509,57 @@ export const profileAvatars = pgTable(
     pathOwned: check(
       'profile_avatars_path_owned',
       sql`${table.objectPath} like ${table.userId}::text || '/%'`,
+    ),
+  }),
+);
+
+export const workspaces = pgTable(
+  'workspaces',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex('workspaces_slug_unique').on(table.slug),
+  }),
+);
+
+export const workspaceMembers = pgTable(
+  'workspace_members',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    primaryKey: primaryKey({
+      columns: [table.workspaceId, table.userId],
+      name: 'workspace_members_pkey',
+    }),
+    userIdIdx: index('workspace_members_user_id_idx').on(table.userId),
+    roleAllowed: check(
+      'workspace_members_role_allowed',
+      sql`${table.role} in ('owner', 'admin', 'member')`,
     ),
   }),
 );

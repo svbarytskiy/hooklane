@@ -8,6 +8,7 @@ import { BillingOverviewPage } from "../pages/billing/BillingOverviewPage";
 import { BillingSubscriptionCancelPage } from "../pages/billing/BillingSubscriptionCancelPage";
 import { BillingSubscriptionSuccessPage } from "../pages/billing/BillingSubscriptionSuccessPage";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
+import { WorkspacesPage } from "../pages/workspaces/WorkspacesPage";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "workspaces", element: <WorkspacesPage /> },
       { path: "auth", element: <AuthPage /> },
       { path: "billing", element: <BillingOverviewPage /> },
       { path: "admin/billing", element: <AdminBillingPage /> },
