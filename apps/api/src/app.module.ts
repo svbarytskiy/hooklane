@@ -12,6 +12,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 import { PremiumModule } from './premium/premium.module';
 import { RedisModule } from './redis/redis.module';
+import { WorkspacesModule } from './workspaces/workspaces.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { RedisModule } from './redis/redis.module';
     BillingModule,
     PremiumModule,
     RedisModule,
+    WorkspacesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
