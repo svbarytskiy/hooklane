@@ -27,6 +27,7 @@ import { useWorkflowQuery } from "../../features/workflows/api/use-workflow-quer
 import { useWorkflowVersionsQuery } from "../../features/workflows/api/use-workflow-versions-query";
 import { WorkflowDraftEditor } from "../../features/workflows/ui/WorkflowDraftEditor";
 import { WorkflowVersionSummary } from "../../features/workflows/ui/WorkflowVersionSummary";
+import { WebhookEndpointsPanel } from "../../features/webhook-endpoints/ui/WebhookEndpointsPanel";
 import { useWorkspacesQuery } from "../../features/workspaces/api/use-workspaces-query";
 import { getApiErrorMessage } from "../../shared/api/api-error";
 
@@ -96,6 +97,9 @@ export function WorkflowEditorPage() {
 
   const workflow = workflowQuery.data;
   const isArchived = workflow?.status === "archived";
+  const hasPublishedVersion = versionsQuery.data?.some(
+    (version) => version.state === "published",
+  );
   const error =
     workspacesQuery.error ??
     workflowQuery.error ??
@@ -167,6 +171,16 @@ export function WorkflowEditorPage() {
       {versionsQuery.data && (
         <WorkflowVersionSummary versions={versionsQuery.data} />
       )}
+
+      <WebhookEndpointsPanel
+        workspaceId={workspaceId ?? ""}
+        workflowId={workflowId ?? ""}
+        canEdit={Boolean(canEdit)}
+        canCreate={
+          Boolean(canEdit) && !isArchived && Boolean(hasPublishedVersion)
+        }
+        isAuthenticated={isAuthenticated}
+      />
 
       {!isArchived && draft && (
         <WorkflowDraftEditor

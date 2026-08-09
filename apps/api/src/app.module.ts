@@ -14,6 +14,7 @@ import { PremiumModule } from './premium/premium.module';
 import { RedisModule } from './redis/redis.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { WorkflowsModule } from './workflows/workflows.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
     RedisModule,
     WorkspacesModule,
     WorkflowsModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

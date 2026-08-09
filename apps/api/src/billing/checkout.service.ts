@@ -13,6 +13,7 @@ import type {
 } from '@hooklane/contracts';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
+import { isUniqueViolation } from 'src/database/postgres-error';
 import { payments } from 'src/database/schema';
 import type { Env } from 'src/config/env.schema';
 import { STRIPE_CLIENT } from 'src/stripe/stripe.tokens';
@@ -111,7 +112,7 @@ export class CheckoutService {
             stripeCheckoutSessionId: payments.stripeCheckoutSessionId,
           });
       } catch (error) {
-        if (!this.isUniqueViolation(error)) {
+        if (!isUniqueViolation(error)) {
           throw error;
         }
 
@@ -208,14 +209,5 @@ export class CheckoutService {
       .limit(1);
 
     return payment ?? null;
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === '23505'
-    );
   }
 }

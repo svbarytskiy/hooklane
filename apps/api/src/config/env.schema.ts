@@ -16,6 +16,14 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().url(),
 
+  WEBHOOK_SECRETS_ENCRYPTION_KEY: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => Buffer.from(value, 'base64').length === 32,
+      'Must be a base64-encoded 32-byte key',
+    ),
+
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
