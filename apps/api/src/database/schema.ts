@@ -684,3 +684,202 @@ export const workflowAuditRecords = pgTable(
     ),
   }),
 );
+
+export const webhookEndpoints = pgTable(
+  'webhook_endpoints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+
+    name: text('name').notNull(),
+
+    // Random public identifier, e.g. wh_...
+    // This is safe to place in a URL; it is not a signing secret.
+    publicId: text('public_id').notNull(),
+
+    status: text('status').notNull().default('active'),
+
+    signatureMode: text('signature_mode').notNull().default('none'),
+
+    // Never store plaintext secret. The API will later encrypt it before writing.
+    signingSecretCiphertext: text('signing_secret_ciphertext'),
+
+    secretLastRotatedAt: timestamp('secret_last_rotated_at', {
+      withTimezone: true,
+    }),
+
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    publicIdUnique: uniqueIndex('webhook_endpoints_public_id_unique').on(
+      table.publicId,
+    ),
+    workspaceIdIdx: index('webhook_endpoints_workspace_id_idx').on(
+      table.workspaceId,
+    ),
+    workflowIdIdx: index('webhook_endpoints_workflow_id_idx').on(
+      table.workflowId,
+    ),
+    workflowNameUnique: uniqueIndex(
+      'webhook_endpoints_workflow_name_unique',
+    ).on(table.workflowId, table.name),
+    nameNotBlank: check(
+      'webhook_endpoints_name_not_blank',
+      sql`length(trim(${table.name})) > 0`,
+    ),
+    statusAllowed: check(
+      'webhook_endpoints_status_allowed',
+      sql`${table.status} in ('active', 'inactive')`,
+    ),
+    signatureModeAllowed: check(
+      'webhook_endpoints_signature_mode_allowed',
+      sql`${table.signatureMode} in ('none', 'hmac_sha256')`,
+    ),
+    secretMatchesSignatureMode: check(
+      'webhook_endpoints_secret_matches_signature_mode',
+      sql`(${table.signatureMode} = 'none' and ${table.signingSecretCiphertext} is null) or (${table.signatureMode} = 'hmac_sha256' and ${table.signingSecretCiphertext} is not null)`,
+    ),
+  }),
+);
+
+export const incomingEvents = pgTable(
+  'incoming_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    webhookEndpointId: uuid('webhook_endpoint_id')
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: 'restrict' }),
+
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'restrict' }),
+
+    workflowVersionId: uuid('workflow_version_id')
+      .notNull()
+      .references(() => workflowVersions.id, { onDelete: 'restrict' }),
+
+    // Optional caller-provided replay/idempotency key.
+    // In the public protocol we will call it X-Hooklane-Event-Id.
+    sourceEventId: text('source_event_id'),
+
+    contentType: text('content_type').notNull(),
+    payload: jsonb('payload').notNull(),
+    payloadSha256: text('payload_sha256').notNull(),
+    payloadSizeBytes: integer('payload_size_bytes').notNull(),
+
+    status: text('status').notNull().default('accepted'),
+
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    endpointSourceEventUnique: uniqueIndex(
+      'incoming_events_endpoint_source_event_unique',
+    )
+      .on(table.webhookEndpointId, table.sourceEventId)
+      .where(sql`${table.sourceEventId} is not null`),
+
+    workspaceReceivedAtIdx: index(
+      'incoming_events_workspace_received_at_idx',
+    ).on(table.workspaceId, table.receivedAt),
+
+    endpointReceivedAtIdx: index('incoming_events_endpoint_received_at_idx').on(
+      table.webhookEndpointId,
+      table.receivedAt,
+    ),
+
+    workflowVersionIdIdx: index('incoming_events_workflow_version_id_idx').on(
+      table.workflowVersionId,
+    ),
+
+    payloadSizePositive: check(
+      'incoming_events_payload_size_positive',
+      sql`${table.payloadSizeBytes} > 0`,
+    ),
+    statusAllowed: check(
+      'incoming_events_status_allowed',
+      sql`${table.status} in ('accepted')`,
+    ),
+  }),
+);
+
+export const executions = pgTable(
+  'executions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'restrict' }),
+
+    workflowVersionId: uuid('workflow_version_id')
+      .notNull()
+      .references(() => workflowVersions.id, { onDelete: 'restrict' }),
+
+    incomingEventId: uuid('incoming_event_id')
+      .notNull()
+      .references(() => incomingEvents.id, { onDelete: 'restrict' }),
+
+    status: text('status').notNull().default('pending'),
+
+    queuedAt: timestamp('queued_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+
+    failure: jsonb('failure'),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    incomingEventUnique: uniqueIndex('executions_incoming_event_id_unique').on(
+      table.incomingEventId,
+    ),
+
+    workspaceCreatedAtIdx: index('executions_workspace_created_at_idx').on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+
+    workflowStatusCreatedAtIdx: index(
+      'executions_workflow_status_created_at_idx',
+    ).on(table.workflowId, table.status, table.createdAt),
+
+    statusAllowed: check(
+      'executions_status_allowed',
+      sql`${table.status} in ('pending', 'queued', 'running', 'succeeded', 'failed', 'cancelled')`,
+    ),
+  }),
+);

@@ -7,6 +7,7 @@ import {
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
+import { isUniqueViolation } from 'src/database/postgres-error';
 import { profiles, workspaceMembers, workspaces } from 'src/database/schema';
 
 @Injectable()
@@ -40,7 +41,7 @@ export class WorkspacesService {
         };
       });
     } catch (error) {
-      if (this.isUniqueViolation(error)) {
+      if (isUniqueViolation(error)) {
         throw new ConflictException('Workspace slug already exists');
       }
 
@@ -130,19 +131,5 @@ export class WorkspacesService {
       .leftJoin(profiles, eq(profiles.id, workspaceMembers.userId))
       .where(eq(workspaceMembers.workspaceId, workspaceId))
       .orderBy(asc(workspaceMembers.createdAt));
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    const cause =
-      typeof error === 'object' && error !== null && 'cause' in error
-        ? ((error as { cause?: unknown }).cause ?? error)
-        : error;
-
-    return (
-      typeof cause === 'object' &&
-      cause !== null &&
-      'code' in cause &&
-      cause.code === '23505'
-    );
   }
 }

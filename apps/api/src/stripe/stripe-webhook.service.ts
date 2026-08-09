@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import type { Env } from 'src/config/env.schema';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
+import { isUniqueViolation } from 'src/database/postgres-error';
 import { stripeWebhookEvents } from 'src/database/schema';
 import { STRIPE_CLIENT } from './stripe.tokens';
 import type { StripeClient } from './stripe.types';
@@ -99,7 +100,7 @@ export class StripeWebhookService {
         })}`,
       );
 
-      if (!this.isUniqueViolation(error)) {
+      if (!isUniqueViolation(error)) {
         throw error;
       }
 
@@ -146,14 +147,5 @@ export class StripeWebhookService {
         error: error instanceof Error ? error.message : 'Unknown webhook error',
       })
       .where(eq(stripeWebhookEvents.stripeEventId, stripeEventId));
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === '23505'
-    );
   }
 }

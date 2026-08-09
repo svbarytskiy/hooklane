@@ -8,6 +8,7 @@ import {
 import { and, desc, eq } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
+import { isUniqueViolation } from 'src/database/postgres-error';
 import {
   workflowAuditRecords,
   workflowVersions,
@@ -65,7 +66,7 @@ export class WorkflowsService {
         return { ...workflow, draft };
       });
     } catch (error) {
-      if (this.isUniqueViolation(error)) {
+      if (isUniqueViolation(error)) {
         throw new ConflictException(
           'Workflow slug already exists in this workspace',
         );
@@ -390,19 +391,5 @@ export class WorkflowsService {
 
       return archivedWorkflow;
     });
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    const cause =
-      typeof error === 'object' && error !== null && 'cause' in error
-        ? ((error as { cause?: unknown }).cause ?? error)
-        : error;
-
-    return (
-      typeof cause === 'object' &&
-      cause !== null &&
-      'code' in cause &&
-      cause.code === '23505'
-    );
   }
 }

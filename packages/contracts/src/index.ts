@@ -29,3 +29,4 @@ export type {
 } from "./billing.js";
 export * from "./workspaces.js";
 export * from "./workflows.js";
+export * from "./webhooks.js";

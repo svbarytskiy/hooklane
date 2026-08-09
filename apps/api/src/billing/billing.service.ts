@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
+import { isUniqueViolation } from 'src/database/postgres-error';
 import { STRIPE_CLIENT } from 'src/stripe/stripe.tokens';
 import type { StripeClient } from 'src/stripe/stripe.types';
 import { desc, eq, sql } from 'drizzle-orm';
@@ -178,7 +179,7 @@ export class BillingService {
 
       return createdCustomer;
     } catch (error) {
-      if (!this.isUniqueViolation(error)) {
+      if (!isUniqueViolation(error)) {
         throw error;
       }
 
@@ -192,15 +193,6 @@ export class BillingService {
 
       return existingCustomer;
     }
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === '23505'
-    );
   }
 
   async createBillingPortalSession(
