@@ -16,6 +16,7 @@ import {
 import { useForm } from '@mantine/form';
 import { IconAlertCircle, IconBuilding, IconPlus } from '@tabler/icons-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthSession } from '../../features/auth/model/use-auth-session';
 import { useCreateWorkspaceMutation } from '../../features/workspaces/api/use-create-workspace-mutation';
 import { useWorkspacesQuery } from '../../features/workspaces/api/use-workspaces-query';
@@ -206,6 +207,16 @@ export function WorkspacesPage() {
                 onClick={() => setMembersWorkspaceId(workspace.id)}
               >
                 View members
+              </Button>
+              <Button
+                component={Link}
+                to={`/workspaces/${workspace.id}/workflows`}
+                variant="light"
+                color="violet"
+                mt="md"
+                ml="xs"
+              >
+                Open workflows
               </Button>
             </Card>
           ))}

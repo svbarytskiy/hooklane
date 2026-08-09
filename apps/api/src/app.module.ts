@@ -13,6 +13,7 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
 import { PremiumModule } from './premium/premium.module';
 import { RedisModule } from './redis/redis.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
+import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
     PremiumModule,
     RedisModule,
     WorkspacesModule,
+    WorkflowsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
