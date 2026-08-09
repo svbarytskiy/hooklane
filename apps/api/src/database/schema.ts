@@ -563,3 +563,124 @@ export const workspaceMembers = pgTable(
     ),
   }),
 );
+
+export const workflows = pgTable(
+  'workflows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    status: text('status').notNull().default('active'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workspaceSlugUnique: uniqueIndex('workflows_workspace_slug_unique').on(
+      table.workspaceId,
+      table.slug,
+    ),
+    workspaceIdIdx: index('workflows_workspace_id_idx').on(table.workspaceId),
+    statusAllowed: check(
+      'workflows_status_allowed',
+      sql`${table.status} in ('active', 'archived')`,
+    ),
+  }),
+);
+
+export const workflowVersions = pgTable(
+  'workflow_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    versionNumber: integer('version_number').notNull(),
+    state: text('state').notNull().default('draft'),
+    definition: jsonb('definition').notNull(),
+    validationErrors: jsonb('validation_errors'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workflowVersionUnique: uniqueIndex(
+      'workflow_versions_workflow_version_unique',
+    ).on(table.workflowId, table.versionNumber),
+    oneDraftPerWorkflow: uniqueIndex('workflow_versions_one_draft_per_workflow')
+      .on(table.workflowId)
+      .where(sql`${table.state} = 'draft'`),
+    workflowIdIdx: index('workflow_versions_workflow_id_idx').on(
+      table.workflowId,
+    ),
+    versionNumberPositive: check(
+      'workflow_versions_version_number_positive',
+      sql`${table.versionNumber} > 0`,
+    ),
+    stateAllowed: check(
+      'workflow_versions_state_allowed',
+      sql`${table.state} in ('draft', 'published')`,
+    ),
+    publishedAtMatchesState: check(
+      'workflow_versions_published_at_matches_state',
+      sql`(${table.state} = 'draft' and ${table.publishedAt} is null) or (${table.state} = 'published' and ${table.publishedAt} is not null)`,
+    ),
+  }),
+);
+
+export const workflowAuditRecords = pgTable(
+  'workflow_audit_records',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+    eventType: text('event_type').notNull(),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workflowCreatedAtIdx: index(
+      'workflow_audit_records_workflow_created_at_idx',
+    ).on(table.workflowId, table.createdAt),
+    workspaceCreatedAtIdx: index(
+      'workflow_audit_records_workspace_created_at_idx',
+    ).on(table.workspaceId, table.createdAt),
+    eventTypeAllowed: check(
+      'workflow_audit_records_event_type_allowed',
+      sql`${table.eventType} in ('workflow_created', 'draft_updated', 'workflow_published', 'workflow_archived')`,
+    ),
+  }),
+);

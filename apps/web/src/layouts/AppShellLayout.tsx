@@ -62,15 +62,15 @@ export function AppShellLayout() {
             </ThemeIcon>
             <Box>
               <Title order={4} lh={1.1}>
-                Billing Lab
+                Hooklane
               </Title>
               <Text size="xs" c="dimmed">
-                Stripe + Supabase integration workspace
+                Versioned webhook automation
               </Text>
             </Box>
           </Group>
           <Badge variant="light" color="gray">
-            Local dev
+            Staging-ready
           </Badge>
         </Group>
       </AppShell.Header>
@@ -87,7 +87,11 @@ export function AppShellLayout() {
                 component={Link}
                 to={item.to}
                 label={item.label}
-                active={location.pathname === item.to}
+                active={
+                  location.pathname === item.to ||
+                  (item.to === "/workspaces" &&
+                    location.pathname.startsWith("/workspaces/"))
+                }
                 leftSection={<Icon size={18} />}
               />
             );

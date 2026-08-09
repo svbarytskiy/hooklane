@@ -9,7 +9,7 @@ import {
 } from '@mantine/core';
 import { IconBuilding } from '@tabler/icons-react';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthSession } from '../../auth/model/use-auth-session';
 import { useWorkspacesQuery } from '../api/use-workspaces-query';
 
@@ -17,6 +17,7 @@ const selectedWorkspaceStorageKey = 'hooklane:selected-workspace-id';
 
 export function WorkspaceSelector() {
   const { accessToken } = useAuthSession();
+  const navigate = useNavigate();
   const workspacesQuery = useWorkspacesQuery(Boolean(accessToken));
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     localStorage.getItem(selectedWorkspaceStorageKey),
@@ -64,7 +65,10 @@ export function WorkspaceSelector() {
       value={selectedWorkspaceId}
       onChange={(value) => {
         setSelectedId(value);
-        if (value) localStorage.setItem(selectedWorkspaceStorageKey, value);
+        if (value) {
+          localStorage.setItem(selectedWorkspaceStorageKey, value);
+          navigate(`/workspaces/${value}/workflows`);
+        }
       }}
       data={workspaces.map((workspace) => ({
         value: workspace.id,

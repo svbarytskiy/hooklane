@@ -9,6 +9,8 @@ import { BillingSubscriptionCancelPage } from "../pages/billing/BillingSubscript
 import { BillingSubscriptionSuccessPage } from "../pages/billing/BillingSubscriptionSuccessPage";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
 import { WorkspacesPage } from "../pages/workspaces/WorkspacesPage";
+import { WorkflowEditorPage } from "../pages/workflows/WorkflowEditorPage";
+import { WorkflowsPage } from "../pages/workflows/WorkflowsPage";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +20,14 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
       { path: "workspaces", element: <WorkspacesPage /> },
+      {
+        path: "workspaces/:workspaceId/workflows",
+        element: <WorkflowsPage />,
+      },
+      {
+        path: "workspaces/:workspaceId/workflows/:workflowId",
+        element: <WorkflowEditorPage />,
+      },
       { path: "auth", element: <AuthPage /> },
       { path: "billing", element: <BillingOverviewPage /> },
       { path: "admin/billing", element: <AdminBillingPage /> },
