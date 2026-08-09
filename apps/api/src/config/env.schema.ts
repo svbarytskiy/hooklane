@@ -23,6 +23,31 @@ export const envSchema = z.object({
       (value) => Buffer.from(value, 'base64').length === 32,
       'Must be a base64-encoded 32-byte key',
     ),
+  WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(300),
+  WEBHOOK_RATE_LIMIT_MAX_REQUESTS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+  WEBHOOK_RATE_LIMIT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+  WEBHOOK_PAYLOAD_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30),
+  WEBHOOK_REDACT_KEYS: z
+    .string()
+    .default(
+      'password,token,secret,authorization,api_key,apikey,access_token,refresh_token,client_secret',
+    ),
 
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
