@@ -24,6 +24,21 @@ export type IncomingEventReceipt = {
   eventId: string;
   executionId: string;
   status: "accepted";
+  duplicate: boolean;
+};
+
+export type WebhookDeliveryHistoryItem = {
+  eventId: string;
+  executionId: string;
+  endpointId: string;
+  sourceEventId: string | null;
+  workflowVersionId: string;
+  eventStatus: IncomingEventStatus;
+  executionStatus: ExecutionStatus;
+  payload: unknown;
+  payloadSizeBytes: number;
+  receivedAt: string;
+  createdAt: string;
 };
 
 export type CreateWebhookEndpointRequest = {

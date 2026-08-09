@@ -13,6 +13,23 @@ export class RedisService implements OnModuleDestroy {
     return this.client.ping();
   }
 
+  async consumeFixedWindow(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<{ allowed: boolean; remaining: number }> {
+    const count = await this.client.incr(key);
+
+    if (count === 1) {
+      await this.client.expire(key, windowSeconds);
+    }
+
+    return {
+      allowed: count <= limit,
+      remaining: Math.max(0, limit - count),
+    };
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
   }
