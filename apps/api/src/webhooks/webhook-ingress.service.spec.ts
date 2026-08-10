@@ -4,6 +4,11 @@ import {
   GoneException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+
+jest.mock('@hooklane/queue', () => ({
+  EXECUTE_WORKFLOW_JOB: 'execute-workflow',
+}));
+
 import { WebhookIngressService } from './webhook-ingress.service';
 
 const endpoint = {
@@ -63,15 +68,28 @@ function createService(
   const signature = {
     verify: jest.fn(),
   };
+  const executionProducer = {
+    enqueueExecution: jest.fn().mockResolvedValue('execution-1'),
+  };
+  const database = {
+    ...db,
+    update: jest.fn().mockReturnValue({
+      set: jest.fn().mockReturnValue({
+        where: jest.fn().mockResolvedValue([]),
+      }),
+    }),
+  };
 
   return {
     service: new WebhookIngressService(
-      db as never,
+      database as never,
       crypto as never,
       signature as never,
+      executionProducer as never,
     ),
     crypto,
     signature,
+    executionProducer,
     endpoint: { ...endpoint, ...endpointOverrides },
   };
 }

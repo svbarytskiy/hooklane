@@ -21,6 +21,7 @@ import {
 } from 'src/database/schema';
 import { WebhookSecretCryptoService } from './webhook-secret-crypto.service';
 import { WebhookSignatureService } from './webhook-signature.service';
+import { WorkflowExecutionProducer } from 'src/queues/workflow-execution.producer';
 
 const MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
 const MAX_SOURCE_EVENT_ID_LENGTH = 200;
@@ -42,6 +43,7 @@ export class WebhookIngressService {
     private readonly db: Database,
     private readonly webhookSecretCrypto: WebhookSecretCryptoService,
     private readonly webhookSignature: WebhookSignatureService,
+    private readonly executionProducer: WorkflowExecutionProducer,
   ) {}
 
   async acceptWebhook(
@@ -55,7 +57,7 @@ export class WebhookIngressService {
     const sourceEventId = this.normalizeSourceEventId(input.sourceEventId);
     const contentType = input.contentType.split(';')[0].trim().toLowerCase();
 
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       const endpoint = await this.findEndpoint(tx, input.publicId);
 
       if (!endpoint) {
@@ -165,10 +167,18 @@ export class WebhookIngressService {
         }
 
         return {
-          eventId: existingEvent.id,
-          executionId: existingExecution.id,
-          status: 'accepted',
-          duplicate: true,
+          receipt: {
+            eventId: existingEvent.id,
+            executionId: existingExecution.id,
+            status: 'accepted' as const,
+            duplicate: true,
+          },
+          enqueue: existingExecution.status === 'pending',
+          job: {
+            executionId: existingExecution.id,
+            incomingEventId: existingEvent.id,
+            workflowVersionId: existingExecution.workflowVersionId,
+          },
         };
       }
 
@@ -190,12 +200,42 @@ export class WebhookIngressService {
       }
 
       return {
-        eventId: storedEvent.id,
-        executionId: execution.id,
-        status: 'accepted',
-        duplicate: false,
+        receipt: {
+          eventId: storedEvent.id,
+          executionId: execution.id,
+          status: 'accepted' as const,
+          duplicate: false,
+        },
+        enqueue: true,
+        job: {
+          executionId: execution.id,
+          incomingEventId: storedEvent.id,
+          workflowVersionId: publishedVersion.id,
+        },
       };
     });
+
+    if (result.enqueue) {
+      try {
+        await this.executionProducer.enqueueExecution(result.job);
+        await this.db
+          .update(executions)
+          .set({ status: 'queued', queuedAt: new Date() })
+          .where(
+            and(
+              eq(executions.id, result.job.executionId),
+              eq(executions.status, 'pending'),
+            ),
+          );
+      } catch (error) {
+        throw new InternalServerErrorException(
+          'Webhook was stored but could not be queued',
+          { cause: error },
+        );
+      }
+    }
+
+    return result.receipt;
   }
 
   private validatePayload(input: AcceptWebhookInput): void {
@@ -287,7 +327,11 @@ export class WebhookIngressService {
 
   private async findExecutionByEventId(tx: Database, eventId: string) {
     const [execution] = await tx
-      .select({ id: executions.id })
+      .select({
+        id: executions.id,
+        status: executions.status,
+        workflowVersionId: executions.workflowVersionId,
+      })
       .from(executions)
       .where(eq(executions.incomingEventId, eventId))
       .limit(1);
