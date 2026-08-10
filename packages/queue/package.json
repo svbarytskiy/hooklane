@@ -1,0 +1,16 @@
+{
+  "name": "@hooklane/queue",
+  "version": "1.0.0",
+  "description": "Shared BullMQ primitives for Hooklane API and worker processes.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "echo \"Queue tests run through the API workspace\""
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "bullmq": "^6.0.10",
+    "ioredis": "^6.0.0"
+  }
+}

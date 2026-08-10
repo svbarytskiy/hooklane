@@ -1,0 +1,13 @@
+{
+  "name": "@hooklane/db",
+  "version": "1.0.0",
+  "description": "Shared Drizzle database primitives for Hooklane services.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  }
+}
