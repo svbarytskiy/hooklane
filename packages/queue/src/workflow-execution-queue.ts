@@ -7,12 +7,38 @@ import {
   WORKFLOW_EXECUTION_QUEUE,
 } from "./queue-names.js";
 
-export function createWorkflowExecutionQueue(redisUrl: string) {
+export type WorkflowQueueOptions = {
+  attempts?: number;
+  backoffDelayMs?: number;
+  concurrency?: number;
+  removeOnComplete?: number;
+  removeOnFail?: number;
+};
+
+const defaults: Required<WorkflowQueueOptions> = {
+  attempts: 3,
+  backoffDelayMs: 1_000,
+  concurrency: 1,
+  removeOnComplete: 1_000,
+  removeOnFail: 5_000,
+};
+
+export function createWorkflowExecutionQueue(
+  redisUrl: string,
+  options: WorkflowQueueOptions = {},
+) {
+  const config = { ...defaults, ...options };
+
   return new Queue<ExecuteWorkflowJob>(WORKFLOW_EXECUTION_QUEUE, {
     connection: createBullMqRedisConnection(redisUrl),
     defaultJobOptions: {
-      removeOnComplete: 1000,
-      removeOnFail: 5000,
+      attempts: config.attempts,
+      backoff: {
+        type: "exponential",
+        delay: config.backoffDelayMs,
+      },
+      removeOnComplete: config.removeOnComplete,
+      removeOnFail: config.removeOnFail,
     },
   });
 }
@@ -20,10 +46,13 @@ export function createWorkflowExecutionQueue(redisUrl: string) {
 export function createWorkflowExecutionWorker(
   redisUrl: string,
   processor: (job: Job<ExecuteWorkflowJob>) => Promise<unknown>,
+  options: WorkflowQueueOptions = {},
 ) {
+  const config = { ...defaults, ...options };
+
   return new Worker<ExecuteWorkflowJob>(WORKFLOW_EXECUTION_QUEUE, processor, {
     connection: createBullMqRedisConnection(redisUrl),
-    concurrency: 1,
+    concurrency: config.concurrency,
   });
 }
 

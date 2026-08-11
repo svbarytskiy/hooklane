@@ -45,5 +45,14 @@ jobs:
       - name: Build API
         run: npm run build:api
 
+      - name: Lint worker
+        run: npm run lint:worker
+
+      - name: Test worker
+        run: npm run test:worker
+
+      - name: Build worker
+        run: npm run build:worker
+
       - name: Build web
         run: npm run build:web

@@ -19,11 +19,27 @@ export class WorkflowExecutionProcessor
     private readonly runner: WorkflowExecutionRunner,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     const redisUrl = this.config.get("REDIS_URL", { infer: true });
 
-    this.worker = createWorkflowExecutionWorker(redisUrl, (job) =>
-      this.process(job),
+    this.worker = createWorkflowExecutionWorker(
+      redisUrl,
+      (job) => this.process(job),
+      {
+        attempts: this.config.get("WORKFLOW_MAX_ATTEMPTS", { infer: true }),
+        backoffDelayMs: this.config.get("WORKFLOW_BACKOFF_DELAY_MS", {
+          infer: true,
+        }),
+        concurrency: this.config.get("WORKFLOW_QUEUE_CONCURRENCY", {
+          infer: true,
+        }),
+        removeOnComplete: this.config.get("WORKFLOW_COMPLETED_RETENTION", {
+          infer: true,
+        }),
+        removeOnFail: this.config.get("WORKFLOW_FAILED_RETENTION", {
+          infer: true,
+        }),
+      },
     );
 
     this.worker.on("completed", (job) => {
@@ -35,6 +51,9 @@ export class WorkflowExecutionProcessor
     this.worker.on("error", (error) => {
       console.error("[worker] infrastructure error", error);
     });
+
+    await Promise.all([this.worker.waitUntilReady(), this.database.ping()]);
+    console.log("[worker] ready redis=ok postgres=ok");
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -55,11 +74,29 @@ export class WorkflowExecutionProcessor
       return;
     }
 
+    let attemptId: string | undefined;
     try {
+      attemptId = await this.database.startAttempt(
+        job.data.executionId,
+        job.attemptsMade + 1,
+      );
+      const currentAttemptId = attemptId;
       const context = await this.database.loadExecutionContext(
         job.data.executionId,
       );
-      const result = await this.runner.run(context);
+      const result = await this.runner.run({
+        ...context,
+        onStep: (step, index, output) =>
+          this.database.recordStep(
+            job.data.executionId,
+            currentAttemptId,
+            step.id,
+            index,
+            "succeeded",
+            output,
+          ),
+      });
+      await this.database.completeAttempt(currentAttemptId, "succeeded");
       console.log(
         `[worker] executed execution=${context.executionId} steps=${result.executedSteps}`,
       );
@@ -67,7 +104,20 @@ export class WorkflowExecutionProcessor
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown workflow error";
-      await this.database.markFailed(job.data.executionId, { message });
+      if (attemptId) {
+        await this.database.completeAttempt(attemptId, "failed", { message });
+      }
+      const maxAttempts = this.config.get("WORKFLOW_MAX_ATTEMPTS", {
+        infer: true,
+      });
+      const hasRetryLeft = job.attemptsMade + 1 < maxAttempts;
+      if (hasRetryLeft) {
+        await this.database.markRetryableFailure(job.data.executionId, {
+          message,
+        });
+      } else {
+        await this.database.markFailed(job.data.executionId, { message });
+      }
       throw error;
     }
   }

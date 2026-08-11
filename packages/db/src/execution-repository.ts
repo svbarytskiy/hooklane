@@ -1,7 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { executions, incomingEvents, workflowVersions } from "./schema.js";
+import {
+  executionAttempts,
+  executionOutbox,
+  executionSteps,
+  executions,
+  incomingEvents,
+  workflowVersions,
+} from "./schema.js";
 
 export type ExecutionContext = {
   executionId: string;
@@ -10,10 +17,36 @@ export type ExecutionContext = {
 };
 
 export type ExecutionRepository = {
+  ping(): Promise<void>;
   claimExecution(executionId: string): Promise<boolean>;
   loadExecutionContext(executionId: string): Promise<ExecutionContext>;
   markSucceeded(executionId: string): Promise<void>;
   markFailed(executionId: string, failure: { message: string }): Promise<void>;
+  markRetryableFailure(
+    executionId: string,
+    failure: { message: string },
+  ): Promise<void>;
+  startAttempt(executionId: string, attemptNumber: number): Promise<string>;
+  completeAttempt(
+    attemptId: string,
+    status: "succeeded" | "failed",
+    error?: { message: string },
+  ): Promise<void>;
+  recordStep(
+    executionId: string,
+    attemptId: string,
+    stepId: string,
+    stepIndex: number,
+    status: "succeeded" | "failed",
+    output?: unknown,
+    error?: { message: string },
+  ): Promise<void>;
+  createOutbox(executionId: string): Promise<string>;
+  listPendingOutbox(
+    limit: number,
+  ): Promise<Array<{ id: string; executionId: string }>>;
+  markOutboxPublished(id: string): Promise<void>;
+  markOutboxFailed(id: string, message: string): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -22,10 +55,20 @@ export function createExecutionRepository(
 ): ExecutionRepository {
   const client = postgres(databaseUrl, { max: 5 });
   const db = drizzle(client, {
-    schema: { executions, incomingEvents, workflowVersions },
+    schema: {
+      executions,
+      incomingEvents,
+      workflowVersions,
+      executionAttempts,
+      executionSteps,
+      executionOutbox,
+    },
   });
 
   return {
+    async ping() {
+      await db.execute(sql`select 1`);
+    },
     async loadExecutionContext(executionId) {
       const [context] = await db
         .select({
@@ -110,6 +153,101 @@ export function createExecutionRepository(
         .where(
           and(eq(executions.id, executionId), eq(executions.status, "running")),
         );
+    },
+
+    async markRetryableFailure(executionId, failure) {
+      await db
+        .update(executions)
+        .set({
+          status: "queued",
+          failure,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(executions.id, executionId), eq(executions.status, "running")),
+        );
+    },
+
+    async startAttempt(executionId, attemptNumber) {
+      const [attempt] = await db
+        .insert(executionAttempts)
+        .values({
+          executionId,
+          attemptNumber,
+          status: "running",
+          startedAt: new Date(),
+        })
+        .returning({ id: executionAttempts.id });
+
+      if (!attempt) {
+        throw new Error(`Attempt for execution ${executionId} was not created`);
+      }
+
+      return attempt.id;
+    },
+
+    async completeAttempt(attemptId, status, error) {
+      await db
+        .update(executionAttempts)
+        .set({ status, completedAt: new Date(), error: error ?? null })
+        .where(eq(executionAttempts.id, attemptId));
+    },
+
+    async recordStep(
+      executionId,
+      attemptId,
+      stepId,
+      stepIndex,
+      status,
+      output,
+      error,
+    ) {
+      await db.insert(executionSteps).values({
+        executionId,
+        attemptId,
+        stepId,
+        stepIndex,
+        status,
+        output: output ?? null,
+        error: error ?? null,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+    },
+
+    async createOutbox(executionId) {
+      const [entry] = await db
+        .insert(executionOutbox)
+        .values({ executionId, createdAt: new Date() })
+        .returning({ id: executionOutbox.id });
+
+      if (!entry) throw new Error("Execution outbox entry was not created");
+      return entry.id;
+    },
+
+    async listPendingOutbox(limit) {
+      return db
+        .select({
+          id: executionOutbox.id,
+          executionId: executionOutbox.executionId,
+        })
+        .from(executionOutbox)
+        .where(eq(executionOutbox.status, "pending"))
+        .limit(limit);
+    },
+
+    async markOutboxPublished(id) {
+      await db
+        .update(executionOutbox)
+        .set({ status: "published", publishedAt: new Date() })
+        .where(eq(executionOutbox.id, id));
+    },
+
+    async markOutboxFailed(id, message) {
+      await db
+        .update(executionOutbox)
+        .set({ lastError: message, attempts: 1 })
+        .where(eq(executionOutbox.id, id));
     },
 
     async close() {
