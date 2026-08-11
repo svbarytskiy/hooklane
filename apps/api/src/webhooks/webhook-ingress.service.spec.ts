@@ -111,6 +111,7 @@ describe('WebhookIngressService', () => {
   it('stores an accepted event and creates one pending execution transactionally', async () => {
     const eventInsert = insertReturning([{ id: 'event-1' }]);
     const executionInsert = insertReturning([{ id: 'execution-1' }]);
+    const outboxInsert = { values: jest.fn().mockResolvedValue(undefined) };
     const tx = {
       select: jest
         .fn()
@@ -119,7 +120,8 @@ describe('WebhookIngressService', () => {
       insert: jest
         .fn()
         .mockReturnValueOnce(eventInsert)
-        .mockReturnValueOnce(executionInsert),
+        .mockReturnValueOnce(executionInsert)
+        .mockReturnValueOnce(outboxInsert),
     };
     const db = {
       transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
@@ -300,6 +302,7 @@ describe('WebhookIngressService', () => {
   it('does not verify signatures for explicitly unsigned endpoints', async () => {
     const eventInsert = insertReturning([{ id: 'event-1' }]);
     const executionInsert = insertReturning([{ id: 'execution-1' }]);
+    const outboxInsert = { values: jest.fn().mockResolvedValue(undefined) };
     const tx = {
       select: jest
         .fn()
@@ -316,7 +319,8 @@ describe('WebhookIngressService', () => {
       insert: jest
         .fn()
         .mockReturnValueOnce(eventInsert)
-        .mockReturnValueOnce(executionInsert),
+        .mockReturnValueOnce(executionInsert)
+        .mockReturnValueOnce(outboxInsert),
     };
     const db = {
       transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>

@@ -20,6 +20,10 @@ export class WorkerDatabaseService implements OnModuleDestroy {
     return this.repository.claimExecution(executionId);
   }
 
+  ping(): Promise<void> {
+    return this.repository.ping();
+  }
+
   loadExecutionContext(executionId: string): Promise<ExecutionContext> {
     return this.repository.loadExecutionContext(executionId);
   }
@@ -30,6 +34,45 @@ export class WorkerDatabaseService implements OnModuleDestroy {
 
   markFailed(executionId: string, failure: { message: string }): Promise<void> {
     return this.repository.markFailed(executionId, failure);
+  }
+
+  markRetryableFailure(
+    executionId: string,
+    failure: { message: string },
+  ): Promise<void> {
+    return this.repository.markRetryableFailure(executionId, failure);
+  }
+
+  startAttempt(executionId: string, attemptNumber: number): Promise<string> {
+    return this.repository.startAttempt(executionId, attemptNumber);
+  }
+
+  completeAttempt(
+    attemptId: string,
+    status: "succeeded" | "failed",
+    error?: { message: string },
+  ): Promise<void> {
+    return this.repository.completeAttempt(attemptId, status, error);
+  }
+
+  recordStep(
+    executionId: string,
+    attemptId: string,
+    stepId: string,
+    stepIndex: number,
+    status: "succeeded" | "failed",
+    output?: unknown,
+    error?: { message: string },
+  ): Promise<void> {
+    return this.repository.recordStep(
+      executionId,
+      attemptId,
+      stepId,
+      stepIndex,
+      status,
+      output,
+      error,
+    );
   }
 
   onModuleDestroy(): Promise<void> {

@@ -4,6 +4,11 @@ import { Injectable } from "@nestjs/common";
 type RunnerInput = {
   payload: unknown;
   definition: unknown;
+  onStep?: (
+    step: WorkflowStep,
+    index: number,
+    output: unknown,
+  ) => Promise<void>;
 };
 
 type RunnerResult = {
@@ -30,6 +35,7 @@ export class WorkflowExecutionRunner {
     for (const step of definition.steps) {
       const shouldContinue = await this.executeStep(step, state);
       executedSteps += 1;
+      await input.onStep?.(step, executedSteps - 1, state.data);
 
       if (!shouldContinue) {
         break;
@@ -48,11 +54,7 @@ export class WorkflowExecutionRunner {
         for (const [field, expression] of Object.entries(
           step.config.assignments,
         )) {
-          this.setPath(
-            state.data,
-            field,
-            this.resolveExpression(expression, state),
-          );
+          this.setPath(state.data, field, this.resolveValue(expression, state));
         }
         return true;
       case "condition":

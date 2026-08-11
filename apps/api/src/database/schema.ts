@@ -883,3 +883,16 @@ export const executions = pgTable(
     ),
   }),
 );
+
+export const executionOutbox = pgTable('execution_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  executionId: uuid('execution_id').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -14,6 +14,7 @@ import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import {
   executions,
+  executionOutbox,
   incomingEvents,
   webhookEndpoints,
   workflowVersions,
@@ -199,6 +200,10 @@ export class WebhookIngressService {
         );
       }
 
+      await tx.insert(executionOutbox).values({
+        executionId: execution.id,
+      });
+
       return {
         receipt: {
           eventId: storedEvent.id,
@@ -227,6 +232,10 @@ export class WebhookIngressService {
               eq(executions.status, 'pending'),
             ),
           );
+        await this.db
+          .update(executionOutbox)
+          .set({ status: 'published', publishedAt: new Date() })
+          .where(eq(executionOutbox.executionId, result.job.executionId));
       } catch (error) {
         throw new InternalServerErrorException(
           'Webhook was stored but could not be queued',

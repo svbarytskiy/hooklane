@@ -75,7 +75,10 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "moduleNameMapper": {
-      "^src/(.*)$": "<rootDir>/$1"
+      "^src/(.*)$": "<rootDir>/$1",
+      "^@hooklane/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts",
+      "^@hooklane/db$": "<rootDir>/../../../packages/db/src/index.ts",
+      "^@hooklane/queue$": "<rootDir>/../../../packages/queue/src/index.ts"
     },
     "transform": {
       "^.+\\.(t|j)s$": [
