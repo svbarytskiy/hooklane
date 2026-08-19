@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { WorkerEnv } from "../config/env.schema";
+import { WorkflowRuntimeError } from "./workflow-runtime.error";
 
 @Injectable()
 export class HttpRequestPolicyService {
@@ -28,29 +29,45 @@ export class HttpRequestPolicyService {
 
   async assertAllowed(url: URL): Promise<void> {
     if (!["http:", "https:"].includes(url.protocol)) {
-      throw new Error("HTTP steps only support http and https URLs");
+      throw this.policyError("HTTP steps only support http and https URLs");
     }
     if (url.username || url.password) {
-      throw new Error("HTTP step URLs must not contain credentials");
+      throw this.policyError("HTTP step URLs must not contain credentials");
     }
     if (this.matchesAny(url.hostname, this.deniedHosts)) {
-      throw new Error(`HTTP host ${url.hostname} is denied by policy`);
+      throw this.policyError(`HTTP host ${url.hostname} is denied by policy`);
     }
     if (
       !this.allowedHosts.includes("*") &&
       !this.matchesAny(url.hostname, this.allowedHosts)
     ) {
-      throw new Error(`HTTP host ${url.hostname} is not in the allowlist`);
-    }
-
-    const addresses = await lookup(url.hostname, { all: true, verbatim: true });
-    if (addresses.length === 0) {
-      throw new Error(
-        `HTTP host ${url.hostname} did not resolve to an address`,
+      throw this.policyError(
+        `HTTP host ${url.hostname} is not in the allowlist`,
       );
     }
+
+    let addresses: Array<{ address: string; family: number }>;
+    try {
+      addresses = await lookup(url.hostname, { all: true, verbatim: true });
+    } catch (error) {
+      throw new WorkflowRuntimeError(
+        {
+          code: "http_dns_lookup_failed",
+          category: "network",
+          message: `HTTP host ${url.hostname} could not be resolved`,
+        },
+        { cause: error },
+      );
+    }
+    if (addresses.length === 0) {
+      throw new WorkflowRuntimeError({
+        code: "http_dns_lookup_failed",
+        category: "network",
+        message: `HTTP host ${url.hostname} did not resolve to an address`,
+      });
+    }
     if (addresses.some(({ address }) => this.isPrivateAddress(address))) {
-      throw new Error(
+      throw this.policyError(
         `HTTP host ${url.hostname} resolves to a blocked address`,
       );
     }
@@ -63,10 +80,22 @@ export class HttpRequestPolicyService {
       Number.isFinite(Number(contentLength)) &&
       Number(contentLength) > this.maxResponseBytes
     ) {
-      throw new Error(
-        `HTTP response exceeds ${this.maxResponseBytes} byte limit`,
-      );
+      throw new WorkflowRuntimeError({
+        code: "http_response_too_large",
+        category: "validation",
+        message: `HTTP response exceeds ${this.maxResponseBytes} byte limit`,
+        retryable: false,
+      });
     }
+  }
+
+  private policyError(message: string): WorkflowRuntimeError {
+    return new WorkflowRuntimeError({
+      code: "http_request_rejected",
+      category: "validation",
+      message,
+      retryable: false,
+    });
   }
 
   private readHostPatterns(value: string): string[] {

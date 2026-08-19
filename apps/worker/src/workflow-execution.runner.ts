@@ -1,10 +1,18 @@
-import type { WorkflowDefinition, WorkflowStep } from "@hooklane/contracts";
+import type {
+  WorkflowDefinition,
+  WorkflowExecutionError,
+  WorkflowStep,
+} from "@hooklane/contracts";
 import { Injectable } from "@nestjs/common";
 import {
   createExecutionRuntimeContext,
   type ExecutionRuntimeContext,
 } from "./runtime/execution-runtime-context";
 import { StepExecutorRegistry } from "./runtime/step-executor.registry";
+import {
+  toWorkflowExecutionError,
+  WorkflowRuntimeError,
+} from "./runtime/workflow-runtime.error";
 
 type RunnerInput = {
   payload: unknown;
@@ -26,16 +34,26 @@ const defaultLimits: ExecutionRuntimeLimits = {
   stepTimeoutMs: 30_000,
 };
 
-export class ExecutionCancelledError extends Error {
+export class ExecutionCancelledError extends WorkflowRuntimeError {
   constructor() {
-    super("Execution was cancelled");
+    super({
+      code: "execution_cancelled",
+      category: "cancellation",
+      message: "Execution was cancelled",
+      retryable: false,
+    });
     this.name = "ExecutionCancelledError";
   }
 }
 
-export class ExecutionTimeoutError extends Error {
+export class ExecutionTimeoutError extends WorkflowRuntimeError {
   constructor(message: string) {
-    super(message);
+    super({
+      code: "execution_timeout",
+      category: "timeout",
+      message,
+      retryable: true,
+    });
     this.name = "ExecutionTimeoutError";
   }
 }
@@ -50,7 +68,7 @@ export type StepLifecycleCallbacks = {
   onFailed?: (
     step: WorkflowStep,
     index: number,
-    error: { code: string; message: string; stepId: string },
+    error: WorkflowExecutionError,
   ) => Promise<void>;
   onSkipped?: (step: WorkflowStep, index: number) => Promise<void>;
 };
@@ -68,9 +86,12 @@ export class WorkflowExecutionRunner {
     const definition = this.parseDefinition(input.definition);
     const limits = input.limits ?? defaultLimits;
     if (definition.steps.length > limits.maxSteps) {
-      throw new ExecutionTimeoutError(
-        `Workflow has ${definition.steps.length} steps; limit is ${limits.maxSteps}`,
-      );
+      throw new WorkflowRuntimeError({
+        code: "workflow_step_limit_exceeded",
+        category: "validation",
+        message: `Workflow has ${definition.steps.length} steps; limit is ${limits.maxSteps}`,
+        retryable: false,
+      });
     }
 
     const context = createExecutionRuntimeContext(input.payload);
@@ -109,21 +130,11 @@ export class WorkflowExecutionRunner {
           break;
         }
       } catch (error) {
-        if (error instanceof ExecutionCancelledError) {
-          await input.lifecycle?.onFailed?.(step, index, {
-            code: "execution_cancelled",
-            message: error.message,
-            stepId: step.id,
-          });
-          throw error;
-        }
-        const message =
-          error instanceof Error ? error.message : "Unknown step error";
-        await input.lifecycle?.onFailed?.(step, index, {
-          code: "step_execution_failed",
-          message,
-          stepId: step.id,
-        });
+        await input.lifecycle?.onFailed?.(
+          step,
+          index,
+          toWorkflowExecutionError(error, step.id),
+        );
         throw error;
       }
     }
@@ -137,7 +148,12 @@ export class WorkflowExecutionRunner {
       typeof value !== "object" ||
       !Array.isArray((value as { steps?: unknown }).steps)
     ) {
-      throw new Error("Workflow definition is invalid at execution time");
+      throw new WorkflowRuntimeError({
+        code: "workflow_definition_invalid",
+        category: "validation",
+        message: "Workflow definition is invalid at execution time",
+        retryable: false,
+      });
     }
 
     return value as WorkflowDefinition;

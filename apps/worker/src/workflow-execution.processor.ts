@@ -2,10 +2,11 @@ import type { ExecuteWorkflowJob } from "@hooklane/contracts";
 import { createWorkflowExecutionWorker } from "@hooklane/queue";
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Job, Worker } from "bullmq";
+import { UnrecoverableError, type Job, type Worker } from "bullmq";
 import type { WorkerEnv } from "./config/env.schema";
 import { WorkerDatabaseService } from "./database/worker-database.service";
 import { ExecutionDataSanitizerService } from "./runtime/execution-data-sanitizer.service";
+import { toWorkflowExecutionError } from "./runtime/workflow-runtime.error";
 import {
   ExecutionCancelledError,
   WorkflowExecutionRunner,
@@ -33,6 +34,12 @@ export class WorkflowExecutionProcessor
       {
         attempts: this.config.get("WORKFLOW_MAX_ATTEMPTS", { infer: true }),
         backoffDelayMs: this.config.get("WORKFLOW_BACKOFF_DELAY_MS", {
+          infer: true,
+        }),
+        backoffMaxDelayMs: this.config.get("WORKFLOW_BACKOFF_MAX_DELAY_MS", {
+          infer: true,
+        }),
+        backoffJitterRatio: this.config.get("WORKFLOW_BACKOFF_JITTER_RATIO", {
           infer: true,
         }),
         concurrency: this.config.get("WORKFLOW_QUEUE_CONCURRENCY", {
@@ -149,26 +156,23 @@ export class WorkflowExecutionProcessor
       );
       await this.database.markSucceeded(job.data.executionId);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown workflow error";
+      const failure = toWorkflowExecutionError(error);
       if (attemptId) {
-        await this.database.completeAttempt(attemptId, "failed", {
-          message,
-        });
+        await this.database.completeAttempt(attemptId, "failed", failure);
       }
       if (error instanceof ExecutionCancelledError) {
         return;
       }
-      const maxAttempts = this.config.get("WORKFLOW_MAX_ATTEMPTS", {
-        infer: true,
-      });
+      const maxAttempts = job.opts.attempts ?? 1;
       const hasRetryLeft = job.attemptsMade + 1 < maxAttempts;
-      if (hasRetryLeft) {
-        await this.database.markRetryableFailure(job.data.executionId, {
-          message,
-        });
+      if (failure.retryable && hasRetryLeft) {
+        await this.database.markRetryableFailure(job.data.executionId, failure);
       } else {
-        await this.database.markFailed(job.data.executionId, { message });
+        await this.database.markFailed(job.data.executionId, failure);
+      }
+
+      if (!failure.retryable) {
+        throw new UnrecoverableError(failure.message);
       }
       throw error;
     }

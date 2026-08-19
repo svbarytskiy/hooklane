@@ -8,6 +8,7 @@ import {
   type ExecutionRuntimeContext,
 } from "./execution-runtime-context";
 import type { StepExecutionResult, StepExecutor } from "./step-executor.types";
+import { WorkflowRuntimeError } from "./workflow-runtime.error";
 
 @Injectable()
 export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
@@ -26,7 +27,10 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
   ): Promise<StepExecutionResult> {
     const url = this.expressions.resolveValue(step.config.url, context);
     if (typeof url !== "string") {
-      throw new Error(`HTTP step ${step.id} resolved URL must be a string`);
+      throw this.validationError(
+        step.id,
+        `HTTP step ${step.id} resolved URL must be a string`,
+      );
     }
 
     const body =
@@ -42,7 +46,21 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       step.id,
       body !== undefined,
     );
-    let requestUrl = new URL(url);
+    let requestUrl: URL;
+    try {
+      requestUrl = new URL(url);
+    } catch (error) {
+      throw new WorkflowRuntimeError(
+        {
+          code: "http_url_invalid",
+          category: "validation",
+          message: `HTTP step ${step.id} resolved an invalid URL`,
+          retryable: false,
+          stepId: step.id,
+        },
+        { cause: error },
+      );
+    }
     let response: Response | undefined;
 
     for (
@@ -51,30 +69,54 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       redirects += 1
     ) {
       await this.policy.assertAllowed(requestUrl);
-      response = await fetch(requestUrl, {
-        method: step.config.method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal,
-        redirect: "manual",
-      });
+      try {
+        response = await fetch(requestUrl, {
+          method: step.config.method,
+          headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal,
+          redirect: "manual",
+        });
+      } catch (error) {
+        if (signal.aborted && signal.reason instanceof Error) {
+          throw signal.reason;
+        }
+        throw new WorkflowRuntimeError(
+          {
+            code: "http_network_error",
+            category: "network",
+            message: `HTTP step ${step.id} could not reach ${requestUrl.host}`,
+            stepId: step.id,
+          },
+          { cause: error },
+        );
+      }
 
       if (!this.isRedirect(response.status)) break;
       if (redirects === this.policy.maxRedirects) {
-        throw new Error("HTTP redirect limit exceeded");
+        throw this.validationError(step.id, "HTTP redirect limit exceeded");
       }
 
       const location = response.headers.get("location");
-      if (!location) throw new Error("HTTP redirect response has no location");
+      if (!location) {
+        throw this.validationError(
+          step.id,
+          "HTTP redirect response has no location",
+        );
+      }
       const nextUrl = new URL(location, requestUrl);
       if (nextUrl.origin !== requestUrl.origin) {
-        throw new Error("Cross-origin HTTP redirects are blocked by policy");
+        throw this.validationError(
+          step.id,
+          "Cross-origin HTTP redirects are blocked by policy",
+        );
       }
       if (
         !["GET", "HEAD"].includes(step.config.method) &&
         [301, 302, 303].includes(response.status)
       ) {
-        throw new Error(
+        throw this.validationError(
+          step.id,
           "HTTP redirect changes request semantics and is blocked",
         );
       }
@@ -83,12 +125,36 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       requestUrl = nextUrl;
     }
 
-    if (!response) throw new Error("HTTP request did not produce a response");
+    if (!response) {
+      throw new WorkflowRuntimeError({
+        code: "http_network_error",
+        category: "network",
+        message: "HTTP request did not produce a response",
+        stepId: step.id,
+      });
+    }
     this.policy.assertResponseSize(response);
 
-    const responseText = await this.readResponseText(response);
+    let responseText: string;
+    try {
+      responseText = await this.readResponseText(response);
+    } catch (error) {
+      if (error instanceof WorkflowRuntimeError) throw error;
+      if (signal.aborted && signal.reason instanceof Error) {
+        throw signal.reason;
+      }
+      throw new WorkflowRuntimeError(
+        {
+          code: "http_network_error",
+          category: "network",
+          message: `HTTP step ${step.id} response stream was interrupted`,
+          stepId: step.id,
+        },
+        { cause: error },
+      );
+    }
     if (!response.ok) {
-      throw new Error(`HTTP step ${step.id} failed with ${response.status}`);
+      throw this.responseError(step.id, response);
     }
 
     return {
@@ -112,7 +178,10 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       !isRecord(value) ||
       Object.values(value).some((item) => typeof item !== "string")
     ) {
-      throw new Error(`HTTP step ${stepId} headers must resolve to strings`);
+      throw this.validationError(
+        stepId,
+        `HTTP step ${stepId} headers must resolve to strings`,
+      );
     }
 
     return {
@@ -148,9 +217,12 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
         receivedBytes += value.byteLength;
         if (receivedBytes > this.policy.maxResponseBytes) {
           await reader.cancel();
-          throw new Error(
-            `HTTP response exceeds ${this.policy.maxResponseBytes} byte limit`,
-          );
+          throw new WorkflowRuntimeError({
+            code: "http_response_too_large",
+            category: "validation",
+            message: `HTTP response exceeds ${this.policy.maxResponseBytes} byte limit`,
+            retryable: false,
+          });
         }
         chunks.push(value);
       }
@@ -166,4 +238,87 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
     }
     return new TextDecoder().decode(responseBytes);
   }
+
+  private responseError(
+    stepId: string,
+    response: Response,
+  ): WorkflowRuntimeError {
+    const common = {
+      message: `HTTP step ${stepId} failed with ${response.status}`,
+      stepId,
+      httpStatus: response.status,
+    };
+
+    if (response.status === 401) {
+      return new WorkflowRuntimeError({
+        ...common,
+        code: "http_authentication_failed",
+        category: "authentication",
+        retryable: false,
+      });
+    }
+    if (response.status === 403) {
+      return new WorkflowRuntimeError({
+        ...common,
+        code: "http_authorization_failed",
+        category: "authorization",
+        retryable: false,
+      });
+    }
+    if (response.status === 408) {
+      return new WorkflowRuntimeError({
+        ...common,
+        code: "http_request_timeout",
+        category: "timeout",
+      });
+    }
+    if (response.status === 429) {
+      return new WorkflowRuntimeError({
+        ...common,
+        code: "http_rate_limited",
+        category: "rate_limit",
+        retryAfterMs: parseRetryAfter(response.headers.get("retry-after")),
+      });
+    }
+    if (response.status >= 500) {
+      return new WorkflowRuntimeError({
+        ...common,
+        code: "http_upstream_error",
+        category: "upstream",
+        retryAfterMs: parseRetryAfter(response.headers.get("retry-after")),
+      });
+    }
+
+    return new WorkflowRuntimeError({
+      ...common,
+      code: "http_request_invalid",
+      category: "validation",
+      retryable: false,
+    });
+  }
+
+  private validationError(stepId: string, message: string) {
+    return new WorkflowRuntimeError({
+      code: "http_request_invalid",
+      category: "validation",
+      message,
+      retryable: false,
+      stepId,
+    });
+  }
+}
+
+export function parseRetryAfter(
+  value: string | null,
+  now = Date.now(),
+): number | undefined {
+  if (!value) return undefined;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1_000);
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : undefined;
 }

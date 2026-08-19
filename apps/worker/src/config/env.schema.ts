@@ -9,6 +9,12 @@ export const workerEnvSchema = z.object({
   WORKFLOW_QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(1),
   WORKFLOW_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
   WORKFLOW_BACKOFF_DELAY_MS: z.coerce.number().int().positive().default(1_000),
+  WORKFLOW_BACKOFF_MAX_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(300_000),
+  WORKFLOW_BACKOFF_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.2),
   WORKFLOW_COMPLETED_RETENTION: z.coerce
     .number()
     .int()
