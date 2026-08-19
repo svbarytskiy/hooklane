@@ -39,6 +39,7 @@ export class OutboxReconcilerService implements OnModuleInit, OnModuleDestroy {
           executionId: executions.id,
           incomingEventId: executions.incomingEventId,
           workflowVersionId: executions.workflowVersionId,
+          runSequence: executions.runSequence,
         })
         .from(executionOutbox)
         .innerJoin(executions, eq(executions.id, executionOutbox.executionId))
@@ -60,6 +61,7 @@ export class OutboxReconcilerService implements OnModuleInit, OnModuleDestroy {
             executionId: entry.executionId,
             incomingEventId: entry.incomingEventId,
             workflowVersionId: entry.workflowVersionId,
+            runSequence: entry.runSequence,
           });
           await this.db
             .update(executions)

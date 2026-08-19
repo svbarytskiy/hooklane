@@ -854,6 +854,10 @@ export const executions = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
 
     failure: jsonb('failure'),
+    runSequence: integer('run_sequence').notNull().default(0),
+    replayedFromExecutionId: uuid('replayed_from_execution_id'),
+    activeRecoveryId: uuid('active_recovery_id'),
+    deadLetteredAt: timestamp('dead_lettered_at', { withTimezone: true }),
 
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -864,9 +868,11 @@ export const executions = pgTable(
       .defaultNow(),
   },
   (table) => ({
-    incomingEventUnique: uniqueIndex('executions_incoming_event_id_unique').on(
-      table.incomingEventId,
-    ),
+    originalIncomingEventUnique: uniqueIndex(
+      'executions_original_incoming_event_unique',
+    )
+      .on(table.incomingEventId)
+      .where(sql`${table.replayedFromExecutionId} is null`),
 
     workspaceCreatedAtIdx: index('executions_workspace_created_at_idx').on(
       table.workspaceId,
@@ -879,44 +885,93 @@ export const executions = pgTable(
 
     statusAllowed: check(
       'executions_status_allowed',
-      sql`${table.status} in ('pending', 'queued', 'running', 'succeeded', 'failed', 'cancelled')`,
+      sql`${table.status} in ('pending', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'dead_lettered')`,
     ),
   }),
 );
 
-export const executionOutbox = pgTable('execution_outbox', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  executionId: uuid('execution_id').notNull(),
-  status: text('status').notNull().default('pending'),
-  attempts: integer('attempts').notNull().default(0),
-  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
-  lastError: text('last_error'),
-  publishedAt: timestamp('published_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const executionOutbox = pgTable(
+  'execution_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    executionId: uuid('execution_id').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    executionUnique: uniqueIndex('execution_outbox_execution_id_key').on(
+      table.executionId,
+    ),
+  }),
+);
 
-export const executionAttempts = pgTable('execution_attempts', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  executionId: uuid('execution_id').notNull(),
-  attemptNumber: integer('attempt_number').notNull(),
-  status: text('status').notNull(),
-  startedAt: timestamp('started_at', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  error: jsonb('error'),
-});
+export const executionAttempts = pgTable(
+  'execution_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    executionId: uuid('execution_id').notNull(),
+    attemptNumber: integer('attempt_number').notNull(),
+    status: text('status').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    error: jsonb('error'),
+  },
+  (table) => ({
+    executionAttemptUnique: uniqueIndex(
+      'execution_attempts_execution_attempt_number_unique',
+    ).on(table.executionId, table.attemptNumber),
+  }),
+);
 
-export const executionSteps = pgTable('execution_steps', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  executionId: uuid('execution_id').notNull(),
-  attemptId: uuid('attempt_id').notNull(),
-  stepId: text('step_id').notNull(),
-  stepIndex: integer('step_index').notNull(),
-  status: text('status').notNull(),
-  input: jsonb('input'),
-  output: jsonb('output'),
-  error: jsonb('error'),
-  startedAt: timestamp('started_at', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-});
+export const executionSteps = pgTable(
+  'execution_steps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    executionId: uuid('execution_id').notNull(),
+    attemptId: uuid('attempt_id').notNull(),
+    stepId: text('step_id').notNull(),
+    stepIndex: integer('step_index').notNull(),
+    status: text('status').notNull(),
+    input: jsonb('input'),
+    output: jsonb('output'),
+    error: jsonb('error'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    attemptStepUnique: uniqueIndex('execution_steps_attempt_step_unique').on(
+      table.attemptId,
+      table.stepId,
+    ),
+  }),
+);
+
+export const executionRecoveries = pgTable(
+  'execution_recoveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    executionId: uuid('execution_id').notNull(),
+    targetExecutionId: uuid('target_execution_id'),
+    operation: text('operation').notNull(),
+    fromAttemptId: uuid('from_attempt_id'),
+    stepId: text('step_id'),
+    startStepIndex: integer('start_step_index'),
+    checkpoint: jsonb('checkpoint'),
+    resolutionOutput: jsonb('resolution_output'),
+    requestedBy: uuid('requested_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    executionCreatedAtIdx: index(
+      'execution_recoveries_execution_created_idx',
+    ).on(table.executionId, table.createdAt),
+  }),
+);

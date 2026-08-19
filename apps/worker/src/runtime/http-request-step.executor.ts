@@ -9,6 +9,11 @@ import {
 } from "./execution-runtime-context";
 import type { StepExecutionResult, StepExecutor } from "./step-executor.types";
 import { WorkflowRuntimeError } from "./workflow-runtime.error";
+import {
+  createProviderIdempotencyKey,
+  DEFAULT_IDEMPOTENCY_HEADER,
+  isUnsafeHttpMethod,
+} from "./provider-idempotency";
 
 @Injectable()
 export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
@@ -41,10 +46,10 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       step.config.headers ?? {},
       context,
     );
-    const headers = this.toHeaders(
-      resolvedHeaders,
-      step.id,
-      body !== undefined,
+    const headers = this.withIdempotencyHeader(
+      this.toHeaders(resolvedHeaders, step.id, body !== undefined),
+      step,
+      context,
     );
     let requestUrl: URL;
     try {
@@ -79,7 +84,14 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
         });
       } catch (error) {
         if (signal.aborted && signal.reason instanceof Error) {
+          if (this.isCancellation(signal.reason)) throw signal.reason;
+          if (this.hasAmbiguousSideEffect(step)) {
+            throw this.ambiguousResultError(step, signal.reason);
+          }
           throw signal.reason;
+        }
+        if (this.hasAmbiguousSideEffect(step)) {
+          throw this.ambiguousResultError(step, error);
         }
         throw new WorkflowRuntimeError(
           {
@@ -141,7 +153,14 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) throw error;
       if (signal.aborted && signal.reason instanceof Error) {
+        if (this.isCancellation(signal.reason)) throw signal.reason;
+        if (this.hasAmbiguousSideEffect(step)) {
+          throw this.ambiguousResultError(step, signal.reason);
+        }
         throw signal.reason;
+      }
+      if (this.hasAmbiguousSideEffect(step)) {
+        throw this.ambiguousResultError(step, error);
       }
       throw new WorkflowRuntimeError(
         {
@@ -154,7 +173,7 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       );
     }
     if (!response.ok) {
-      throw this.responseError(step.id, response);
+      throw this.responseError(step, response);
     }
 
     return {
@@ -240,9 +259,10 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
   }
 
   private responseError(
-    stepId: string,
+    step: HttpRequestStep,
     response: Response,
   ): WorkflowRuntimeError {
+    const stepId = step.id;
     const common = {
       message: `HTTP step ${stepId} failed with ${response.status}`,
       stepId,
@@ -266,6 +286,9 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       });
     }
     if (response.status === 408) {
+      if (this.hasAmbiguousSideEffect(step)) {
+        return this.ambiguousResultError(step);
+      }
       return new WorkflowRuntimeError({
         ...common,
         code: "http_request_timeout",
@@ -281,6 +304,9 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       });
     }
     if (response.status >= 500) {
+      if (this.hasAmbiguousSideEffect(step)) {
+        return this.ambiguousResultError(step);
+      }
       return new WorkflowRuntimeError({
         ...common,
         code: "http_upstream_error",
@@ -305,6 +331,60 @@ export class HttpRequestStepExecutor implements StepExecutor<HttpRequestStep> {
       retryable: false,
       stepId,
     });
+  }
+
+  private withIdempotencyHeader(
+    headers: Record<string, string>,
+    step: HttpRequestStep,
+    context: ExecutionRuntimeContext,
+  ): Record<string, string> {
+    if (!step.config.idempotency) return headers;
+
+    const headerName =
+      step.config.idempotency.headerName?.trim() || DEFAULT_IDEMPOTENCY_HEADER;
+    if (
+      Object.keys(headers).some(
+        (existingHeader) =>
+          existingHeader.toLowerCase() === headerName.toLowerCase(),
+      )
+    ) {
+      throw this.validationError(
+        step.id,
+        `HTTP idempotency header ${headerName} must be managed by Hooklane`,
+      );
+    }
+
+    return {
+      ...headers,
+      [headerName]: createProviderIdempotencyKey(context.execution.id, step.id),
+    };
+  }
+
+  private hasAmbiguousSideEffect(step: HttpRequestStep): boolean {
+    return isUnsafeHttpMethod(step.config.method) && !step.config.idempotency;
+  }
+
+  private isCancellation(error: Error): boolean {
+    return (
+      error instanceof WorkflowRuntimeError &&
+      error.code === "execution_cancelled"
+    );
+  }
+
+  private ambiguousResultError(
+    step: HttpRequestStep,
+    cause?: unknown,
+  ): WorkflowRuntimeError {
+    return new WorkflowRuntimeError(
+      {
+        code: "http_ambiguous_result",
+        category: "ambiguous",
+        message: `HTTP step ${step.id} may have completed remotely; automatic retry requires provider idempotency`,
+        retryable: false,
+        stepId: step.id,
+      },
+      { cause },
+    );
   }
 }
 

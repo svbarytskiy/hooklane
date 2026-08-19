@@ -47,8 +47,10 @@ export class WorkerDatabaseService implements OnModuleDestroy {
     return this.repository.markRetryableFailure(executionId, failure);
   }
 
-  startAttempt(executionId: string, attemptNumber: number): Promise<string> {
-    return this.repository.startAttempt(executionId, attemptNumber);
+  startAttempt(
+    executionId: string,
+  ): Promise<{ id: string; attemptNumber: number }> {
+    return this.repository.startAttempt(executionId);
   }
 
   completeAttempt(

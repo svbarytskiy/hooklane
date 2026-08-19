@@ -91,4 +91,68 @@ describe('validateWorkflowDefinition', () => {
       ]),
     );
   });
+
+  it('validates provider idempotency configuration and header ownership', () => {
+    const invalidConfiguration = validateWorkflowDefinition({
+      steps: [
+        {
+          ...validDefinition.steps[0],
+          config: {
+            ...validDefinition.steps[0].config,
+            headers: { 'Idempotency-Key': 'manual-value' },
+            idempotency: { mode: 'execution_step' },
+          },
+        },
+      ],
+    });
+    const invalidHeader = validateWorkflowDefinition({
+      steps: [
+        {
+          ...validDefinition.steps[0],
+          config: {
+            ...validDefinition.steps[0].config,
+            idempotency: {
+              mode: 'execution_step',
+              headerName: 'not a header',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(invalidConfiguration).toEqual([
+      expect.objectContaining({
+        path: 'steps[0].config.headers',
+        code: 'conflict',
+      }),
+    ]);
+    expect(invalidHeader).toEqual([
+      expect.objectContaining({
+        path: 'steps[0].config.idempotency.headerName',
+        code: 'invalid_value',
+      }),
+    ]);
+  });
+
+  it('rejects transform paths that could modify object prototypes', () => {
+    const errors = validateWorkflowDefinition({
+      steps: [
+        {
+          id: 'unsafe-transform',
+          type: 'transform',
+          name: 'Unsafe transform',
+          config: {
+            assignments: { '__proto__.isAdmin': 'true' },
+          },
+        },
+      ],
+    });
+
+    expect(errors).toEqual([
+      expect.objectContaining({
+        path: 'steps[0].config.assignments.__proto__.isAdmin',
+        code: 'invalid_value',
+      }),
+    ]);
+  });
 });

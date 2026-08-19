@@ -7,6 +7,7 @@ export const workflowExecutionErrorCategories = [
   "upstream",
   "timeout",
   "cancellation",
+  "ambiguous",
   "internal",
 ] as const;
 
@@ -18,6 +19,7 @@ export const workflowExecutionErrorCodes = [
   "workflow_step_limit_exceeded",
   "execution_cancelled",
   "execution_timeout",
+  "worker_interrupted",
   "http_url_invalid",
   "http_request_invalid",
   "http_request_rejected",
@@ -29,6 +31,7 @@ export const workflowExecutionErrorCodes = [
   "http_request_timeout",
   "http_rate_limited",
   "http_upstream_error",
+  "http_ambiguous_result",
   "internal_error",
 ] as const;
 

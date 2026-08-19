@@ -4,4 +4,5 @@ export type ExecuteWorkflowJob = {
   executionId: string;
   incomingEventId: string;
   workflowVersionId: string;
+  runSequence?: number;
 };

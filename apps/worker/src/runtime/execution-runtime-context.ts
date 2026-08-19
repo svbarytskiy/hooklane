@@ -3,6 +3,9 @@ export type StepRuntimeState = {
 };
 
 export type ExecutionRuntimeContext = {
+  execution: {
+    id: string;
+  };
   event: {
     payload: unknown;
   };
@@ -10,13 +13,21 @@ export type ExecutionRuntimeContext = {
   steps: Record<string, StepRuntimeState>;
 };
 
+export type ExecutionCheckpoint = Pick<
+  ExecutionRuntimeContext,
+  "variables" | "steps"
+>;
+
 export function createExecutionRuntimeContext(
+  executionId: string,
   payload: unknown,
+  checkpoint?: ExecutionCheckpoint,
 ): ExecutionRuntimeContext {
   return {
+    execution: { id: executionId },
     event: { payload },
-    variables: {},
-    steps: {},
+    variables: { ...checkpoint?.variables },
+    steps: { ...checkpoint?.steps },
   };
 }
 
@@ -25,14 +36,20 @@ export function setRuntimePath(
   path: string,
   value: unknown,
 ): void {
-  const segments = path.split(".").filter(Boolean);
-  if (segments.length === 0) {
-    throw new Error("Transform assignment path cannot be empty");
+  const segments = path.split(".");
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        ["__proto__", "prototype", "constructor"].includes(segment),
+    )
+  ) {
+    throw new Error(`Transform assignment path ${path} is unsafe`);
   }
 
   let cursor = target;
   for (const segment of segments.slice(0, -1)) {
-    const child = cursor[segment];
+    const child = Object.hasOwn(cursor, segment) ? cursor[segment] : undefined;
     if (!isRecord(child)) cursor[segment] = {};
     cursor = cursor[segment] as Record<string, unknown>;
   }

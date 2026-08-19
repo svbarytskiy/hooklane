@@ -34,6 +34,6 @@ import { OutboxReconcilerService } from './outbox-reconciler.service';
     WorkflowExecutionProducer,
     OutboxReconcilerService,
   ],
-  exports: [WorkflowExecutionProducer],
+  exports: [WorkflowExecutionProducer, WORKFLOW_EXECUTION_QUEUE_CLIENT],
 })
 export class QueuesModule {}

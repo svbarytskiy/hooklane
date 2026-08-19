@@ -4,6 +4,7 @@ import postgres from "postgres";
 import {
   executionAttempts,
   executionOutbox,
+  executionRecoveries,
   executionSteps,
   executions,
   incomingEvents,
@@ -14,6 +15,8 @@ export type ExecutionContext = {
   executionId: string;
   payload: unknown;
   definition: unknown;
+  startStepIndex: number;
+  checkpoint: unknown;
 };
 
 export type ExecutionRepository = {
@@ -27,7 +30,9 @@ export type ExecutionRepository = {
     executionId: string,
     failure: { message: string },
   ): Promise<void>;
-  startAttempt(executionId: string, attemptNumber: number): Promise<string>;
+  startAttempt(
+    executionId: string,
+  ): Promise<{ id: string; attemptNumber: number }>;
   completeAttempt(
     attemptId: string,
     status: "succeeded" | "failed",
@@ -74,6 +79,7 @@ export function createExecutionRepository(
       executionAttempts,
       executionSteps,
       executionOutbox,
+      executionRecoveries,
     },
   });
 
@@ -87,6 +93,8 @@ export function createExecutionRepository(
           executionId: executions.id,
           payload: incomingEvents.payload,
           definition: workflowVersions.definition,
+          startStepIndex: executionRecoveries.startStepIndex,
+          checkpoint: executionRecoveries.checkpoint,
         })
         .from(executions)
         .innerJoin(
@@ -97,6 +105,10 @@ export function createExecutionRepository(
           workflowVersions,
           eq(workflowVersions.id, executions.workflowVersionId),
         )
+        .leftJoin(
+          executionRecoveries,
+          eq(executionRecoveries.id, executions.activeRecoveryId),
+        )
         .where(eq(executions.id, executionId))
         .limit(1);
 
@@ -104,7 +116,10 @@ export function createExecutionRepository(
         throw new Error(`Execution context ${executionId} was not found`);
       }
 
-      return context;
+      return {
+        ...context,
+        startStepIndex: context.startStepIndex ?? 0,
+      };
     },
 
     async claimExecution(executionId) {
@@ -118,8 +133,43 @@ export function createExecutionRepository(
         throw new Error(`Execution ${executionId} was not found`);
       }
 
-      if (!["pending", "queued"].includes(current.status)) {
+      if (!["pending", "queued", "running"].includes(current.status)) {
         return false;
+      }
+
+      if (current.status === "running") {
+        const interrupted = {
+          code: "worker_interrupted",
+          category: "internal",
+          message: "Worker stopped before completing the attempt",
+          retryable: true,
+        };
+        await db
+          .update(executionSteps)
+          .set({
+            status: "failed",
+            error: interrupted,
+            completedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executionSteps.executionId, executionId),
+              eq(executionSteps.status, "running"),
+            ),
+          );
+        await db
+          .update(executionAttempts)
+          .set({
+            status: "failed",
+            error: interrupted,
+            completedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executionAttempts.executionId, executionId),
+              eq(executionAttempts.status, "running"),
+            ),
+          );
       }
 
       const claimed = await db
@@ -132,7 +182,7 @@ export function createExecutionRepository(
         .where(
           and(
             eq(executions.id, executionId),
-            inArray(executions.status, ["pending", "queued"]),
+            inArray(executions.status, ["pending", "queued", "running"]),
           ),
         )
         .returning({ id: executions.id });
@@ -194,22 +244,29 @@ export function createExecutionRepository(
         );
     },
 
-    async startAttempt(executionId, attemptNumber) {
+    async startAttempt(executionId) {
       const [attempt] = await db
         .insert(executionAttempts)
         .values({
           executionId,
-          attemptNumber,
+          attemptNumber: sql<number>`(
+            select coalesce(max(${executionAttempts.attemptNumber}), 0) + 1
+            from ${executionAttempts}
+            where ${executionAttempts.executionId} = ${executionId}
+          )`,
           status: "running",
           startedAt: new Date(),
         })
-        .returning({ id: executionAttempts.id });
+        .returning({
+          id: executionAttempts.id,
+          attemptNumber: executionAttempts.attemptNumber,
+        });
 
       if (!attempt) {
         throw new Error(`Attempt for execution ${executionId} was not created`);
       }
 
-      return attempt.id;
+      return attempt;
     },
 
     async completeAttempt(attemptId, status, error) {

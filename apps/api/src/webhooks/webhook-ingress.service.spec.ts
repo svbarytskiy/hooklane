@@ -160,6 +160,7 @@ describe('WebhookIngressService', () => {
       workflowId: 'workflow-1',
       workflowVersionId: 'version-3',
       incomingEventId: 'event-1',
+      runSequence: 0,
       status: 'pending',
     });
   });
