@@ -5,7 +5,11 @@ import { ConfigService } from "@nestjs/config";
 import type { Job, Worker } from "bullmq";
 import type { WorkerEnv } from "./config/env.schema";
 import { WorkerDatabaseService } from "./database/worker-database.service";
-import { WorkflowExecutionRunner } from "./workflow-execution.runner";
+import { ExecutionDataSanitizerService } from "./runtime/execution-data-sanitizer.service";
+import {
+  ExecutionCancelledError,
+  WorkflowExecutionRunner,
+} from "./workflow-execution.runner";
 
 @Injectable()
 export class WorkflowExecutionProcessor
@@ -17,6 +21,7 @@ export class WorkflowExecutionProcessor
     private readonly config: ConfigService<WorkerEnv, true>,
     private readonly database: WorkerDatabaseService,
     private readonly runner: WorkflowExecutionRunner,
+    private readonly sanitizer: ExecutionDataSanitizerService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -39,6 +44,7 @@ export class WorkflowExecutionProcessor
         removeOnFail: this.config.get("WORKFLOW_FAILED_RETENTION", {
           infer: true,
         }),
+        autorun: false,
       },
     );
 
@@ -53,6 +59,9 @@ export class WorkflowExecutionProcessor
     });
 
     await Promise.all([this.worker.waitUntilReady(), this.database.ping()]);
+    void this.worker.run().catch((error) => {
+      console.error("[worker] stopped unexpectedly", error);
+    });
     console.log("[worker] ready redis=ok postgres=ok");
   }
 
@@ -84,17 +93,55 @@ export class WorkflowExecutionProcessor
       const context = await this.database.loadExecutionContext(
         job.data.executionId,
       );
+      const stepRecordIds = new Map<string, string>();
       const result = await this.runner.run({
         ...context,
-        onStep: (step, index, output) =>
-          this.database.recordStep(
-            job.data.executionId,
-            currentAttemptId,
-            step.id,
-            index,
-            "succeeded",
-            output,
-          ),
+        lifecycle: {
+          onStarted: async (step, index) => {
+            const id = await this.database.startStep(
+              job.data.executionId,
+              currentAttemptId,
+              step.id,
+              index,
+              this.sanitizer.stepInput(step),
+            );
+            stepRecordIds.set(step.id, id);
+          },
+          onSucceeded: async (step, _index, output) => {
+            await this.database.completeStep(
+              stepRecordIds.get(step.id)!,
+              "succeeded",
+              this.sanitizer.redact(output),
+            );
+          },
+          onFailed: async (step, _index, error) => {
+            await this.database.completeStep(
+              stepRecordIds.get(step.id)!,
+              "failed",
+              undefined,
+              error,
+            );
+          },
+          onSkipped: (step, index) =>
+            this.database.skipStep(
+              job.data.executionId,
+              currentAttemptId,
+              step.id,
+              index,
+              this.sanitizer.stepInput(step),
+            ),
+        },
+        limits: {
+          maxSteps: this.config.get("WORKFLOW_MAX_STEPS", { infer: true }),
+          maxDurationMs: this.config.get("WORKFLOW_MAX_DURATION_MS", {
+            infer: true,
+          }),
+          stepTimeoutMs: this.config.get("WORKFLOW_STEP_TIMEOUT_MS", {
+            infer: true,
+          }),
+        },
+        isCancellationRequested: () =>
+          this.database.isExecutionCancelled(job.data.executionId),
       });
       await this.database.completeAttempt(currentAttemptId, "succeeded");
       console.log(
@@ -105,7 +152,12 @@ export class WorkflowExecutionProcessor
       const message =
         error instanceof Error ? error.message : "Unknown workflow error";
       if (attemptId) {
-        await this.database.completeAttempt(attemptId, "failed", { message });
+        await this.database.completeAttempt(attemptId, "failed", {
+          message,
+        });
+      }
+      if (error instanceof ExecutionCancelledError) {
+        return;
       }
       const maxAttempts = this.config.get("WORKFLOW_MAX_ATTEMPTS", {
         infer: true,

@@ -13,6 +13,7 @@ export type WorkflowQueueOptions = {
   concurrency?: number;
   removeOnComplete?: number;
   removeOnFail?: number;
+  autorun?: boolean;
 };
 
 const defaults: Required<WorkflowQueueOptions> = {
@@ -21,6 +22,7 @@ const defaults: Required<WorkflowQueueOptions> = {
   concurrency: 1,
   removeOnComplete: 1_000,
   removeOnFail: 5_000,
+  autorun: true,
 };
 
 export function createWorkflowExecutionQueue(
@@ -53,6 +55,7 @@ export function createWorkflowExecutionWorker(
   return new Worker<ExecuteWorkflowJob>(WORKFLOW_EXECUTION_QUEUE, processor, {
     connection: createBullMqRedisConnection(redisUrl),
     concurrency: config.concurrency,
+    autorun: config.autorun,
   });
 }
 

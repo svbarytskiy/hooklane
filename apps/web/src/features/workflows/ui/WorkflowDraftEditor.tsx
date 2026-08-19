@@ -7,6 +7,7 @@ import {
   Divider,
   Group,
   Modal,
+  NumberInput,
   Select,
   Stack,
   Text,
@@ -18,6 +19,7 @@ import {
 } from "@mantine/core";
 import type {
   ConditionStep,
+  DelayStep,
   HttpRequestStep,
   TransformStep,
   WorkflowDefinition,
@@ -70,6 +72,15 @@ function createStep(type: WorkflowStepType): WorkflowStep {
       name: "Transform data",
       config: { assignments: { output: "$.input" } },
     } satisfies TransformStep;
+  }
+
+  if (type === "delay") {
+    return {
+      id,
+      type,
+      name: "Delay",
+      config: { durationMs: 1_000 },
+    } satisfies DelayStep;
   }
 
   return {
@@ -203,6 +214,23 @@ function StepConfigFields({
           </Button>
         )}
       </Stack>
+    );
+  }
+
+  if (step.type === "delay") {
+    return (
+      <NumberInput
+        label="Delay (milliseconds)"
+        description="Maximum 300000 ms (5 minutes). The worker can still stop it earlier at the workflow deadline."
+        value={step.config.durationMs}
+        min={1}
+        max={300_000}
+        disabled={disabled}
+        onChange={(durationMs) =>
+          typeof durationMs === "number" &&
+          onChange({ ...step, config: { durationMs } })
+        }
+      />
     );
   }
 
@@ -400,6 +428,7 @@ export function WorkflowDraftEditor({
                       { value: "http_request", label: "HTTP request" },
                       { value: "transform", label: "Transform" },
                       { value: "condition", label: "Condition" },
+                      { value: "delay", label: "Delay" },
                     ]}
                     onChange={(type) =>
                       type &&
@@ -467,6 +496,17 @@ export function WorkflowDraftEditor({
             }
           >
             Add condition
+          </Button>
+          <Button
+            variant="light"
+            onClick={() =>
+              setDefinition((current) => ({
+                ...current,
+                steps: [...current.steps, createStep("delay")],
+              }))
+            }
+          >
+            Add delay
           </Button>
         </Group>
       )}

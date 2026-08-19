@@ -19,6 +19,7 @@ export type ExecutionContext = {
 export type ExecutionRepository = {
   ping(): Promise<void>;
   claimExecution(executionId: string): Promise<boolean>;
+  isExecutionCancelled(executionId: string): Promise<boolean>;
   loadExecutionContext(executionId: string): Promise<ExecutionContext>;
   markSucceeded(executionId: string): Promise<void>;
   markFailed(executionId: string, failure: { message: string }): Promise<void>;
@@ -32,14 +33,25 @@ export type ExecutionRepository = {
     status: "succeeded" | "failed",
     error?: { message: string },
   ): Promise<void>;
-  recordStep(
+  startStep(
     executionId: string,
     attemptId: string,
     stepId: string,
     stepIndex: number,
+    input?: unknown,
+  ): Promise<string>;
+  completeStep(
+    stepRecordId: string,
     status: "succeeded" | "failed",
     output?: unknown,
-    error?: { message: string },
+    error?: { code: string; message: string; stepId?: string },
+  ): Promise<void>;
+  skipStep(
+    executionId: string,
+    attemptId: string,
+    stepId: string,
+    stepIndex: number,
+    input?: unknown,
   ): Promise<void>;
   createOutbox(executionId: string): Promise<string>;
   listPendingOutbox(
@@ -128,6 +140,20 @@ export function createExecutionRepository(
       return claimed.length === 1;
     },
 
+    async isExecutionCancelled(executionId) {
+      const [execution] = await db
+        .select({ status: executions.status })
+        .from(executions)
+        .where(eq(executions.id, executionId))
+        .limit(1);
+
+      if (!execution) {
+        throw new Error(`Execution ${executionId} was not found`);
+      }
+
+      return execution.status === "cancelled";
+    },
+
     async markSucceeded(executionId) {
       await db
         .update(executions)
@@ -190,28 +216,60 @@ export function createExecutionRepository(
       await db
         .update(executionAttempts)
         .set({ status, completedAt: new Date(), error: error ?? null })
-        .where(eq(executionAttempts.id, attemptId));
+        .where(
+          and(
+            eq(executionAttempts.id, attemptId),
+            eq(executionAttempts.status, "running"),
+          ),
+        );
     },
 
-    async recordStep(
-      executionId,
-      attemptId,
-      stepId,
-      stepIndex,
-      status,
-      output,
-      error,
-    ) {
+    async startStep(executionId, attemptId, stepId, stepIndex, input) {
+      const [step] = await db
+        .insert(executionSteps)
+        .values({
+          executionId,
+          attemptId,
+          stepId,
+          stepIndex,
+          status: "running",
+          input: input ?? null,
+          startedAt: new Date(),
+        })
+        .returning({ id: executionSteps.id });
+
+      if (!step) throw new Error(`Step ${stepId} was not created`);
+      return step.id;
+    },
+
+    async completeStep(stepRecordId, status, output, error) {
+      await db
+        .update(executionSteps)
+        .set({
+          status,
+          output: output ?? null,
+          error: error ?? null,
+          completedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(executionSteps.id, stepRecordId),
+            eq(executionSteps.status, "running"),
+          ),
+        );
+    },
+
+    async skipStep(executionId, attemptId, stepId, stepIndex, input) {
+      const now = new Date();
       await db.insert(executionSteps).values({
         executionId,
         attemptId,
         stepId,
         stepIndex,
-        status,
-        output: output ?? null,
-        error: error ?? null,
-        startedAt: new Date(),
-        completedAt: new Date(),
+        status: "skipped",
+        input: input ?? null,
+        startedAt: now,
+        completedAt: now,
       });
     },
 

@@ -29,6 +29,7 @@ import { WorkflowDraftEditor } from "../../features/workflows/ui/WorkflowDraftEd
 import { WorkflowVersionSummary } from "../../features/workflows/ui/WorkflowVersionSummary";
 import { WebhookEndpointsPanel } from "../../features/webhook-endpoints/ui/WebhookEndpointsPanel";
 import { WebhookDeliveryHistoryPanel } from "../../features/webhook-endpoints/ui/WebhookDeliveryHistoryPanel";
+import { ExecutionHistoryPanel } from "../../features/executions/ui/ExecutionHistoryPanel";
 import { useWorkspacesQuery } from "../../features/workspaces/api/use-workspaces-query";
 import { getApiErrorMessage } from "../../shared/api/api-error";
 
@@ -187,6 +188,13 @@ export function WorkflowEditorPage() {
         workspaceId={workspaceId ?? ""}
         workflowId={workflowId ?? ""}
         isAuthenticated={isAuthenticated}
+      />
+
+      <ExecutionHistoryPanel
+        workspaceId={workspaceId ?? ""}
+        workflowId={workflowId ?? ""}
+        isAuthenticated={isAuthenticated}
+        canCancel={Boolean(canEdit)}
       />
 
       {!isArchived && draft && (

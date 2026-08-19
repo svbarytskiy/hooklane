@@ -1,151 +1,134 @@
 import type { WorkflowDefinition, WorkflowStep } from "@hooklane/contracts";
 import { Injectable } from "@nestjs/common";
+import {
+  createExecutionRuntimeContext,
+  type ExecutionRuntimeContext,
+} from "./runtime/execution-runtime-context";
+import { StepExecutorRegistry } from "./runtime/step-executor.registry";
 
 type RunnerInput = {
   payload: unknown;
   definition: unknown;
-  onStep?: (
+  lifecycle?: StepLifecycleCallbacks;
+  limits?: ExecutionRuntimeLimits;
+  isCancellationRequested?: () => Promise<boolean>;
+};
+
+export type ExecutionRuntimeLimits = {
+  maxSteps: number;
+  maxDurationMs: number;
+  stepTimeoutMs: number;
+};
+
+const defaultLimits: ExecutionRuntimeLimits = {
+  maxSteps: 50,
+  maxDurationMs: 300_000,
+  stepTimeoutMs: 30_000,
+};
+
+export class ExecutionCancelledError extends Error {
+  constructor() {
+    super("Execution was cancelled");
+    this.name = "ExecutionCancelledError";
+  }
+}
+
+export class ExecutionTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExecutionTimeoutError";
+  }
+}
+
+export type StepLifecycleCallbacks = {
+  onStarted?: (step: WorkflowStep, index: number) => Promise<void>;
+  onSucceeded?: (
     step: WorkflowStep,
     index: number,
     output: unknown,
   ) => Promise<void>;
+  onFailed?: (
+    step: WorkflowStep,
+    index: number,
+    error: { code: string; message: string; stepId: string },
+  ) => Promise<void>;
+  onSkipped?: (step: WorkflowStep, index: number) => Promise<void>;
 };
 
 type RunnerResult = {
-  output: unknown;
+  output: ExecutionRuntimeContext;
   executedSteps: number;
-};
-
-type RuntimeState = {
-  payload: unknown;
-  data: Record<string, unknown>;
-  lastResponse?: unknown;
 };
 
 @Injectable()
 export class WorkflowExecutionRunner {
+  constructor(private readonly executors: StepExecutorRegistry) {}
+
   async run(input: RunnerInput): Promise<RunnerResult> {
     const definition = this.parseDefinition(input.definition);
-    const state: RuntimeState = {
-      payload: input.payload,
-      data: this.toRecord(input.payload),
-    };
+    const limits = input.limits ?? defaultLimits;
+    if (definition.steps.length > limits.maxSteps) {
+      throw new ExecutionTimeoutError(
+        `Workflow has ${definition.steps.length} steps; limit is ${limits.maxSteps}`,
+      );
+    }
+
+    const context = createExecutionRuntimeContext(input.payload);
+    const deadline = Date.now() + limits.maxDurationMs;
     let executedSteps = 0;
 
-    for (const step of definition.steps) {
-      const shouldContinue = await this.executeStep(step, state);
-      executedSteps += 1;
-      await input.onStep?.(step, executedSteps - 1, state.data);
+    for (const [index, step] of definition.steps.entries()) {
+      if (await input.isCancellationRequested?.()) {
+        throw new ExecutionCancelledError();
+      }
+      if (Date.now() >= deadline) {
+        throw new ExecutionTimeoutError("Workflow maximum duration exceeded");
+      }
 
-      if (!shouldContinue) {
-        break;
+      await input.lifecycle?.onStarted?.(step, index);
+      try {
+        const result = await this.executeStep(
+          step,
+          context,
+          Math.min(limits.stepTimeoutMs, deadline - Date.now()),
+          input.isCancellationRequested,
+        );
+        context.steps[step.id] = { output: result.output };
+        await input.lifecycle?.onSucceeded?.(step, index, result.output);
+        executedSteps += 1;
+
+        if (!result.shouldContinue) {
+          for (const [skippedIndex, skippedStep] of definition.steps
+            .slice(index + 1)
+            .entries()) {
+            await input.lifecycle?.onSkipped?.(
+              skippedStep,
+              index + skippedIndex + 1,
+            );
+          }
+          break;
+        }
+      } catch (error) {
+        if (error instanceof ExecutionCancelledError) {
+          await input.lifecycle?.onFailed?.(step, index, {
+            code: "execution_cancelled",
+            message: error.message,
+            stepId: step.id,
+          });
+          throw error;
+        }
+        const message =
+          error instanceof Error ? error.message : "Unknown step error";
+        await input.lifecycle?.onFailed?.(step, index, {
+          code: "step_execution_failed",
+          message,
+          stepId: step.id,
+        });
+        throw error;
       }
     }
 
-    return { output: state.data, executedSteps };
-  }
-
-  private async executeStep(
-    step: WorkflowStep,
-    state: RuntimeState,
-  ): Promise<boolean> {
-    switch (step.type) {
-      case "transform":
-        for (const [field, expression] of Object.entries(
-          step.config.assignments,
-        )) {
-          this.setPath(state.data, field, this.resolveValue(expression, state));
-        }
-        return true;
-      case "condition":
-        return this.evaluateCondition(step.config.expression, state);
-      case "http_request":
-        state.lastResponse = await this.executeHttpRequest(step, state);
-        return true;
-    }
-  }
-
-  private async executeHttpRequest(
-    step: Extract<WorkflowStep, { type: "http_request" }>,
-    state: RuntimeState,
-  ): Promise<unknown> {
-    const body = step.config.body
-      ? this.resolveValue(step.config.body, state)
-      : undefined;
-    const response = await fetch(step.config.url, {
-      method: step.config.method,
-      headers: {
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...step.config.headers,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(
-        `HTTP step ${step.id} failed with ${response.status}: ${responseText.slice(0, 500)}`,
-      );
-    }
-
-    try {
-      return responseText ? JSON.parse(responseText) : null;
-    } catch {
-      return responseText;
-    }
-  }
-
-  private evaluateCondition(expression: string, state: RuntimeState): boolean {
-    const match = expression.match(/^(.+?)\s*(===|!==|==|!=)\s*(.+)$/);
-    if (!match) {
-      return Boolean(this.resolveExpression(expression, state));
-    }
-
-    const left = this.resolveExpression(match[1], state);
-    const right = this.resolveExpression(match[3], state);
-    return match[2] === "===" || match[2] === "=="
-      ? left === right
-      : left !== right;
-  }
-
-  private resolveValue(value: unknown, state: RuntimeState): unknown {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.resolveValue(item, state));
-    }
-
-    if (value && typeof value === "object") {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, child]) => [
-          key,
-          this.resolveValue(child, state),
-        ]),
-      );
-    }
-
-    if (typeof value !== "string") {
-      return value;
-    }
-
-    const template = value.match(/^\{\{\s*(.+?)\s*\}\}$/);
-    return template ? this.resolveExpression(template[1], state) : value;
-  }
-
-  private resolveExpression(expression: string, state: RuntimeState): unknown {
-    const normalized = expression.trim();
-    if (normalized === "true") return true;
-    if (normalized === "false") return false;
-    if (normalized === "null") return null;
-    if (/^-?\d+(\.\d+)?$/.test(normalized)) return Number(normalized);
-    if (
-      (normalized.startsWith('"') && normalized.endsWith('"')) ||
-      (normalized.startsWith("'") && normalized.endsWith("'"))
-    ) {
-      return normalized.slice(1, -1);
-    }
-
-    const path = normalized.replace(/^(\$|payload|data)\.?/, "");
-    return this.getPath(state.data, path);
+    return { output: context, executedSteps };
   }
 
   private parseDefinition(value: unknown): WorkflowDefinition {
@@ -160,35 +143,39 @@ export class WorkflowExecutionRunner {
     return value as WorkflowDefinition;
   }
 
-  private toRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? { ...(value as Record<string, unknown>) }
-      : { value };
-  }
-
-  private getPath(value: Record<string, unknown>, path: string): unknown {
-    if (!path) return value;
-    return path.split(".").reduce<unknown>((current, key) => {
-      if (!current || typeof current !== "object") return undefined;
-      return (current as Record<string, unknown>)[key];
-    }, value);
-  }
-
-  private setPath(
-    value: Record<string, unknown>,
-    path: string,
-    nextValue: unknown,
-  ): void {
-    const keys = path.split(".").filter(Boolean);
-    if (keys.length === 0) return;
-    let cursor = value;
-    for (const key of keys.slice(0, -1)) {
-      const child = cursor[key];
-      if (!child || typeof child !== "object" || Array.isArray(child)) {
-        cursor[key] = {};
-      }
-      cursor = cursor[key] as Record<string, unknown>;
+  private async executeStep(
+    step: WorkflowStep,
+    context: ExecutionRuntimeContext,
+    timeoutMs: number,
+    isCancellationRequested?: () => Promise<boolean>,
+  ) {
+    if (timeoutMs <= 0) {
+      throw new ExecutionTimeoutError("Workflow maximum duration exceeded");
     }
-    cursor[keys[keys.length - 1]] = nextValue;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () =>
+        controller.abort(
+          new ExecutionTimeoutError(`Step ${step.id} exceeded its timeout`),
+        ),
+      timeoutMs,
+    );
+    const cancellationPoller = isCancellationRequested
+      ? setInterval(() => {
+          void isCancellationRequested()
+            .then((cancelled) => {
+              if (cancelled) controller.abort(new ExecutionCancelledError());
+            })
+            .catch(() => undefined);
+        }, 1_000)
+      : undefined;
+
+    try {
+      return await this.executors.execute(step, context, controller.signal);
+    } finally {
+      clearTimeout(timeout);
+      if (cancellationPoller) clearInterval(cancellationPoller);
+    }
   }
 }

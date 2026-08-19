@@ -896,3 +896,27 @@ export const executionOutbox = pgTable('execution_outbox', {
     .notNull()
     .defaultNow(),
 });
+
+export const executionAttempts = pgTable('execution_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  executionId: uuid('execution_id').notNull(),
+  attemptNumber: integer('attempt_number').notNull(),
+  status: text('status').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  error: jsonb('error'),
+});
+
+export const executionSteps = pgTable('execution_steps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  executionId: uuid('execution_id').notNull(),
+  attemptId: uuid('attempt_id').notNull(),
+  stepId: text('step_id').notNull(),
+  stepIndex: integer('step_index').notNull(),
+  status: text('status').notNull(),
+  input: jsonb('input'),
+  output: jsonb('output'),
+  error: jsonb('error'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
