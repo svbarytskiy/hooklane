@@ -146,8 +146,44 @@ describe("WorkflowExecutionRunner", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("bad", { status: 503 }));
 
-    await expect(runner.run({ payload: {}, definition })).rejects.toThrow(
-      "HTTP step http-1 failed with 503",
+    await expect(runner.run({ payload: {}, definition })).rejects.toMatchObject(
+      {
+        code: "http_upstream_error",
+        category: "upstream",
+        message: "HTTP step http-1 failed with 503",
+        retryable: true,
+        httpStatus: 503,
+      },
+    );
+    fetchMock.mockRestore();
+  });
+
+  it("classifies rate limiting and preserves Retry-After", async () => {
+    const runner = createRunner();
+    const definition: WorkflowDefinition = {
+      steps: [
+        {
+          id: "http-1",
+          name: "request",
+          type: "http_request",
+          config: { url: "https://example.test/rate-limit", method: "GET" },
+        },
+      ],
+    };
+    const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("slow down", {
+        status: 429,
+        headers: { "retry-after": "15" },
+      }),
+    );
+
+    await expect(runner.run({ payload: {}, definition })).rejects.toMatchObject(
+      {
+        code: "http_rate_limited",
+        category: "rate_limit",
+        retryable: true,
+        retryAfterMs: 15_000,
+      },
     );
     fetchMock.mockRestore();
   });

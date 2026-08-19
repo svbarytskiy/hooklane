@@ -20,6 +20,7 @@ Thumbs.db
 
 *.local
 *.log
+*.tsbuildinfo
 
 apps/api/dist/
 apps/web/dist/

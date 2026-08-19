@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"Queue tests run through the API workspace\""
+    "test": "npm run build && node --test --test-isolation=none dist/workflow-execution-queue.test.js"
   },
   "type": "module",
   "private": true,
