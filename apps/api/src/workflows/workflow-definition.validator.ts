@@ -1,6 +1,11 @@
 import type { WorkflowValidationError } from '@hooklane/contracts';
 
-const supportedStepTypes = new Set(['http_request', 'transform', 'condition']);
+const supportedStepTypes = new Set([
+  'http_request',
+  'transform',
+  'condition',
+  'delay',
+]);
 const supportedHttpMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -94,6 +99,25 @@ function validateConditionConfig(
       path: `${path}.expression`,
       code: 'required',
       message: 'Condition step requires an expression',
+    });
+  }
+}
+
+function validateDelayConfig(
+  config: Record<string, unknown>,
+  path: string,
+  errors: WorkflowValidationError[],
+) {
+  if (
+    typeof config.durationMs !== 'number' ||
+    !Number.isInteger(config.durationMs) ||
+    config.durationMs < 1 ||
+    config.durationMs > 300_000
+  ) {
+    errors.push({
+      path: `${path}.durationMs`,
+      code: 'invalid_value',
+      message: 'Delay duration must be an integer between 1 and 300000 ms',
     });
   }
 }
@@ -197,6 +221,10 @@ export function validateWorkflowDefinition(
 
     if (step.type === 'condition') {
       validateConditionConfig(step.config, `${path}.config`, errors);
+    }
+
+    if (step.type === 'delay') {
+      validateDelayConfig(step.config, `${path}.config`, errors);
     }
   });
 

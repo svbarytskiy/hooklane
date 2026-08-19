@@ -20,6 +20,10 @@ export class WorkerDatabaseService implements OnModuleDestroy {
     return this.repository.claimExecution(executionId);
   }
 
+  isExecutionCancelled(executionId: string): Promise<boolean> {
+    return this.repository.isExecutionCancelled(executionId);
+  }
+
   ping(): Promise<void> {
     return this.repository.ping();
   }
@@ -55,23 +59,44 @@ export class WorkerDatabaseService implements OnModuleDestroy {
     return this.repository.completeAttempt(attemptId, status, error);
   }
 
-  recordStep(
+  startStep(
     executionId: string,
     attemptId: string,
     stepId: string,
     stepIndex: number,
-    status: "succeeded" | "failed",
-    output?: unknown,
-    error?: { message: string },
-  ): Promise<void> {
-    return this.repository.recordStep(
+    input?: unknown,
+  ): Promise<string> {
+    return this.repository.startStep(
       executionId,
       attemptId,
       stepId,
       stepIndex,
-      status,
-      output,
-      error,
+      input,
+    );
+  }
+
+  completeStep(
+    stepRecordId: string,
+    status: "succeeded" | "failed",
+    output?: unknown,
+    error?: { code: string; message: string; stepId?: string },
+  ): Promise<void> {
+    return this.repository.completeStep(stepRecordId, status, output, error);
+  }
+
+  skipStep(
+    executionId: string,
+    attemptId: string,
+    stepId: string,
+    stepIndex: number,
+    input?: unknown,
+  ): Promise<void> {
+    return this.repository.skipStep(
+      executionId,
+      attemptId,
+      stepId,
+      stepIndex,
+      input,
     );
   }
 

@@ -2,7 +2,8 @@ export type WorkflowStatus = "active" | "archived";
 
 export type WorkflowVersionState = "draft" | "published";
 
-export type WorkflowStepType = "http_request" | "transform" | "condition";
+export type WorkflowStepType =
+  "http_request" | "transform" | "condition" | "delay";
 
 export type WorkflowDefinition = {
   steps: WorkflowStep[];
@@ -30,6 +31,10 @@ export type ConditionStepConfig = {
   expression: string;
 };
 
+export type DelayStepConfig = {
+  durationMs: number;
+};
+
 export type HttpRequestStep = WorkflowStepBase<
   "http_request",
   HttpRequestStepConfig
@@ -39,7 +44,10 @@ export type TransformStep = WorkflowStepBase<"transform", TransformStepConfig>;
 
 export type ConditionStep = WorkflowStepBase<"condition", ConditionStepConfig>;
 
-export type WorkflowStep = HttpRequestStep | TransformStep | ConditionStep;
+export type DelayStep = WorkflowStepBase<"delay", DelayStepConfig>;
+
+export type WorkflowStep =
+  HttpRequestStep | TransformStep | ConditionStep | DelayStep;
 
 export type WorkflowValidationError = {
   path: string;

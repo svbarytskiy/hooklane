@@ -72,6 +72,12 @@ describe('validateWorkflowDefinition', () => {
           name: 'Priority order?',
           config: { expression: '  ' },
         },
+        {
+          id: 'delay',
+          type: 'delay',
+          name: 'Wait',
+          config: { durationMs: 0 },
+        },
       ],
     });
 
@@ -81,6 +87,7 @@ describe('validateWorkflowDefinition', () => {
         expect.objectContaining({ path: 'steps[0].config.method' }),
         expect.objectContaining({ path: 'steps[1].config.assignments' }),
         expect.objectContaining({ path: 'steps[2].config.expression' }),
+        expect.objectContaining({ path: 'steps[3].config.durationMs' }),
       ]),
     );
   });

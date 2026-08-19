@@ -12,6 +12,7 @@ const workerState = {
     | undefined,
   close: jest.fn().mockResolvedValue(undefined),
   waitUntilReady: jest.fn().mockResolvedValue(undefined),
+  run: jest.fn().mockResolvedValue(undefined),
   on: jest.fn(),
 };
 
@@ -54,12 +55,14 @@ describe("WorkflowExecutionProcessor", () => {
       createConfig() as never,
       database as never,
       {} as never,
+      {} as never,
     );
 
     await processor.onModuleInit();
 
     expect(workerState.waitUntilReady).toHaveBeenCalled();
     expect(database.ping).toHaveBeenCalled();
+    expect(workerState.run).toHaveBeenCalled();
     await processor.onModuleDestroy();
     expect(workerState.close).toHaveBeenCalled();
   });
@@ -85,6 +88,7 @@ describe("WorkflowExecutionProcessor", () => {
       createConfig() as never,
       database as never,
       runner as never,
+      { stepInput: jest.fn((step) => step.config) } as never,
     );
 
     await processor.onModuleInit();

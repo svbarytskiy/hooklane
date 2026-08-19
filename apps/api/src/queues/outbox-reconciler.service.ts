@@ -45,6 +45,7 @@ export class OutboxReconcilerService implements OnModuleInit, OnModuleDestroy {
         .where(
           and(
             eq(executionOutbox.status, 'pending'),
+            eq(executions.status, 'pending'),
             or(
               isNull(executionOutbox.nextAttemptAt),
               lte(executionOutbox.nextAttemptAt, new Date()),

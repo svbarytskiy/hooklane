@@ -11,6 +11,8 @@ import { WebhookDeliveryService } from './webhook-delivery.service';
 import { WebhookRateLimitService } from './webhook-rate-limit.service';
 import { WebhookSecretCryptoService } from './webhook-secret-crypto.service';
 import { WebhookSignatureService } from './webhook-signature.service';
+import { ExecutionHistoryController } from './execution-history.controller';
+import { ExecutionHistoryService } from './execution-history.service';
 
 @Module({
   imports: [AuthModule, DatabaseModule, WorkspacesModule],
@@ -21,12 +23,14 @@ import { WebhookSignatureService } from './webhook-signature.service';
     WebhookIngressService,
     WebhookDeliveryService,
     WebhookRateLimitService,
+    ExecutionHistoryService,
   ],
   exports: [WebhookSecretCryptoService, WebhookEndpointsService],
   controllers: [
     WebhookEndpointsController,
     WebhookIngressController,
     WebhookDeliveryController,
+    ExecutionHistoryController,
   ],
 })
 export class WebhooksModule {}
