@@ -21,6 +21,10 @@ export type HttpRequestStepConfig = {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   headers?: Record<string, string>;
   body?: unknown;
+  idempotency?: {
+    mode: "execution_step";
+    headerName?: string;
+  };
 };
 
 export type TransformStepConfig = {

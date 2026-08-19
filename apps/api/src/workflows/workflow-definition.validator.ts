@@ -7,6 +7,12 @@ const supportedStepTypes = new Set([
   'delay',
 ]);
 const supportedHttpMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const httpHeaderNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const unsafeRuntimePathSegments = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -56,6 +62,57 @@ function validateHttpRequestConfig(
       message: 'HTTP request headers must be a string-to-string object',
     });
   }
+
+  if (config.idempotency !== undefined) {
+    if (!isRecord(config.idempotency)) {
+      errors.push({
+        path: `${path}.idempotency`,
+        code: 'invalid_type',
+        message: 'HTTP idempotency configuration must be an object',
+      });
+      return;
+    }
+
+    if (config.idempotency.mode !== 'execution_step') {
+      errors.push({
+        path: `${path}.idempotency.mode`,
+        code: 'invalid_value',
+        message: 'HTTP idempotency mode must be execution_step',
+      });
+    }
+
+    const headerName = config.idempotency.headerName;
+    if (
+      headerName !== undefined &&
+      (typeof headerName !== 'string' ||
+        headerName.length > 100 ||
+        !httpHeaderNamePattern.test(headerName))
+    ) {
+      errors.push({
+        path: `${path}.idempotency.headerName`,
+        code: 'invalid_value',
+        message: 'Idempotency header name must be a valid HTTP header name',
+      });
+    }
+
+    if (
+      isRecord(config.headers) &&
+      Object.keys(config.headers).some(
+        (name) =>
+          name.toLowerCase() ===
+          (typeof headerName === 'string' && headerName
+            ? headerName
+            : 'Idempotency-Key'
+          ).toLowerCase(),
+      )
+    ) {
+      errors.push({
+        path: `${path}.headers`,
+        code: 'conflict',
+        message: 'Hooklane-managed idempotency header must not be set manually',
+      });
+    }
+  }
 }
 
 function validateTransformConfig(
@@ -83,6 +140,22 @@ function validateTransformConfig(
       code: 'invalid_type',
       message: 'Transform assignments must map field names to expressions',
     });
+  }
+
+  for (const assignmentPath of Object.keys(config.assignments)) {
+    const segments = assignmentPath.split('.');
+    if (
+      segments.some(
+        (segment) =>
+          segment.length === 0 || unsafeRuntimePathSegments.has(segment),
+      )
+    ) {
+      errors.push({
+        path: `${path}.assignments.${assignmentPath}`,
+        code: 'invalid_value',
+        message: 'Transform assignment path is empty or unsafe',
+      });
+    }
   }
 }
 

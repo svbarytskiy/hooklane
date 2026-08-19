@@ -5,7 +5,13 @@ export type WebhookSignatureMode = "none" | "hmac_sha256";
 export type IncomingEventStatus = "accepted";
 
 export type ExecutionStatus =
-  "pending" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  | "pending"
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "dead_lettered";
 
 export type WebhookEndpointSummary = {
   id: string;
@@ -55,6 +61,9 @@ export type ExecutionSummary = {
   startedAt: string | null;
   completedAt: string | null;
   failure: unknown;
+  runSequence: number;
+  replayedFromExecutionId: string | null;
+  deadLetteredAt: string | null;
   createdAt: string;
 };
 
@@ -83,6 +92,53 @@ export type ExecutionStep = {
 export type ExecutionDetail = ExecutionSummary & {
   attempts: ExecutionAttempt[];
   steps: ExecutionStep[];
+  recoveries: ExecutionRecovery[];
+};
+
+export type ExecutionRecoveryOperation =
+  "retry_failed_step" | "resume" | "replay_as_new" | "dead_letter";
+
+export type ExecutionRecovery = {
+  id: string;
+  operation: ExecutionRecoveryOperation;
+  fromAttemptId: string | null;
+  stepId: string | null;
+  targetExecutionId: string | null;
+  requestedBy: string;
+  createdAt: string;
+};
+
+export type ResumeExecutionRequest = {
+  stepId: string;
+  output: unknown;
+};
+
+export type RecoverExecutionResponse = {
+  recoveryId: string;
+  executionId: string;
+  status: ExecutionStatus;
+};
+
+export type ReplayExecutionResponse = RecoverExecutionResponse & {
+  sourceExecutionId: string;
+};
+
+export type ExecutionObservability = {
+  executions: {
+    byStatus: Partial<Record<ExecutionStatus, number>>;
+    total: number;
+    retried: number;
+    ambiguous: number;
+    averageDurationMs: number | null;
+  };
+  queue: {
+    waiting: number;
+    active: number;
+    delayed: number;
+    failed: number;
+    completed: number;
+    oldestWaitingAgeMs: number | null;
+  };
 };
 
 export type CancelExecutionResponse = {

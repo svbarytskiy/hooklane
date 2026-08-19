@@ -8,7 +8,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
@@ -179,6 +179,7 @@ export class WebhookIngressService {
             executionId: existingExecution.id,
             incomingEventId: existingEvent.id,
             workflowVersionId: existingExecution.workflowVersionId,
+            runSequence: existingExecution.runSequence,
           },
         };
       }
@@ -189,6 +190,7 @@ export class WebhookIngressService {
           workspaceId: endpoint.workspaceId,
           workflowId: endpoint.workflowId,
           workflowVersionId: publishedVersion.id,
+          runSequence: 0,
           incomingEventId: storedEvent.id,
           status: 'pending',
         })
@@ -340,9 +342,15 @@ export class WebhookIngressService {
         id: executions.id,
         status: executions.status,
         workflowVersionId: executions.workflowVersionId,
+        runSequence: executions.runSequence,
       })
       .from(executions)
-      .where(eq(executions.incomingEventId, eventId))
+      .where(
+        and(
+          eq(executions.incomingEventId, eventId),
+          isNull(executions.replayedFromExecutionId),
+        ),
+      )
       .limit(1);
 
     return execution;

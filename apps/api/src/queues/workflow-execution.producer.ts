@@ -13,7 +13,7 @@ export class WorkflowExecutionProducer implements OnModuleDestroy {
 
   async enqueueExecution(data: ExecuteWorkflowJob): Promise<string> {
     const job = await this.queue.add(EXECUTE_WORKFLOW_JOB, data, {
-      jobId: `execution:${data.executionId}`,
+      jobId: `execution:${data.executionId}:run:${data.runSequence ?? 0}`,
     });
 
     return job.id as string;

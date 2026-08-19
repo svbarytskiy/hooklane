@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Divider,
   Group,
   Modal,
@@ -110,35 +111,75 @@ function StepConfigFields({
 }) {
   if (step.type === "http_request") {
     return (
-      <Group grow align="flex-start">
-        <TextInput
-          label="URL"
-          value={step.config.url}
+      <Stack gap="sm">
+        <Group grow align="flex-start">
+          <TextInput
+            label="URL"
+            value={step.config.url}
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({
+                ...step,
+                config: { ...step.config, url: event.currentTarget.value },
+              })
+            }
+          />
+          <Select
+            label="Method"
+            value={step.config.method}
+            disabled={disabled}
+            data={["GET", "POST", "PUT", "PATCH", "DELETE"]}
+            onChange={(method) =>
+              method &&
+              onChange({
+                ...step,
+                config: {
+                  ...step.config,
+                  method: method as HttpRequestStep["config"]["method"],
+                },
+              })
+            }
+          />
+        </Group>
+        <Checkbox
+          label="Provider supports idempotency"
+          description="Hooklane sends one stable key for this execution and step across every retry. The destination API must honor the selected header."
+          checked={Boolean(step.config.idempotency)}
           disabled={disabled}
           onChange={(event) =>
             onChange({
               ...step,
-              config: { ...step.config, url: event.currentTarget.value },
-            })
-          }
-        />
-        <Select
-          label="Method"
-          value={step.config.method}
-          disabled={disabled}
-          data={["GET", "POST", "PUT", "PATCH", "DELETE"]}
-          onChange={(method) =>
-            method &&
-            onChange({
-              ...step,
               config: {
                 ...step.config,
-                method: method as HttpRequestStep["config"]["method"],
+                idempotency: event.currentTarget.checked
+                  ? { mode: "execution_step" }
+                  : undefined,
               },
             })
           }
         />
-      </Group>
+        {step.config.idempotency && (
+          <TextInput
+            label="Idempotency header"
+            description="Defaults to Idempotency-Key. Change this only when the provider expects another header."
+            placeholder="Idempotency-Key"
+            value={step.config.idempotency.headerName ?? ""}
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({
+                ...step,
+                config: {
+                  ...step.config,
+                  idempotency: {
+                    mode: "execution_step",
+                    headerName: event.currentTarget.value || undefined,
+                  },
+                },
+              })
+            }
+          />
+        )}
+      </Stack>
     );
   }
 

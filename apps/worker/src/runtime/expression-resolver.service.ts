@@ -69,7 +69,9 @@ export class ExpressionResolverService {
     }
 
     const segments = this.splitPath(expression);
-    if (["event", "variables", "steps"].includes(segments[0] ?? "")) {
+    if (
+      ["execution", "event", "variables", "steps"].includes(segments[0] ?? "")
+    ) {
       return segments;
     }
 

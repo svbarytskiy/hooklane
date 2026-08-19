@@ -92,10 +92,8 @@ export class WorkflowExecutionProcessor
 
     let attemptId: string | undefined;
     try {
-      attemptId = await this.database.startAttempt(
-        job.data.executionId,
-        job.attemptsMade + 1,
-      );
+      const attempt = await this.database.startAttempt(job.data.executionId);
+      attemptId = attempt.id;
       const currentAttemptId = attemptId;
       const context = await this.database.loadExecutionContext(
         job.data.executionId,

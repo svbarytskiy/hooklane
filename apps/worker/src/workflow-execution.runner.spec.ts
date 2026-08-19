@@ -67,6 +67,7 @@ describe("WorkflowExecutionRunner", () => {
     const skipped: string[] = [];
 
     const result = await runner.run({
+      executionId: "execution-1",
       payload,
       definition,
       lifecycle: {
@@ -120,12 +121,120 @@ describe("WorkflowExecutionRunner", () => {
         new Response(JSON.stringify({ id: "crm-123" }), { status: 201 }),
       );
 
-    const result = await runner.run({ payload: {}, definition });
+    const result = await runner.run({
+      executionId: "execution-1",
+      payload: {},
+      definition,
+    });
 
     expect(result.output.variables.crmContactId).toBe("crm-123");
     expect(result.output.steps["http-1"]?.output).toMatchObject({
       status: 201,
       body: { id: "crm-123" },
+    });
+    fetchMock.mockRestore();
+  });
+
+  it("sends one stable provider idempotency key across retries", async () => {
+    const runner = createRunner();
+    const definition: WorkflowDefinition = {
+      steps: [
+        {
+          id: "create-contact",
+          name: "create contact",
+          type: "http_request",
+          config: {
+            url: "https://example.test/contacts",
+            method: "POST",
+            idempotency: { mode: "execution_step" },
+          },
+        },
+      ],
+    };
+    const observedKeys: string[] = [];
+    const fetchMock = jest.spyOn(globalThis, "fetch").mockImplementation(
+      async (_url, init) => {
+        observedKeys.push(new Headers(init?.headers).get("Idempotency-Key")!);
+        return new Response("{}", { status: 201 });
+      },
+    );
+
+    await runner.run({
+      executionId: "execution-1",
+      payload: {},
+      definition,
+    });
+    await runner.run({
+      executionId: "execution-1",
+      payload: {},
+      definition,
+    });
+    await runner.run({
+      executionId: "execution-2",
+      payload: {},
+      definition,
+    });
+
+    expect(observedKeys).toHaveLength(3);
+    expect(observedKeys[0]).toMatch(/^hl_[a-f0-9]{64}$/);
+    expect(observedKeys[1]).toBe(observedKeys[0]);
+    expect(observedKeys[2]).not.toBe(observedKeys[0]);
+    fetchMock.mockRestore();
+  });
+
+  it("does not retry an ambiguous POST without provider idempotency", async () => {
+    const runner = createRunner();
+    const definition: WorkflowDefinition = {
+      steps: [
+        {
+          id: "create-contact",
+          name: "create contact",
+          type: "http_request",
+          config: {
+            url: "https://example.test/contacts",
+            method: "POST",
+          },
+        },
+      ],
+    };
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("unknown outcome", { status: 503 }));
+
+    await expect(
+      runner.run({ executionId: "execution-1", payload: {}, definition }),
+    ).rejects.toMatchObject({
+      code: "http_ambiguous_result",
+      retryable: false,
+    });
+    fetchMock.mockRestore();
+  });
+
+  it("can retry an idempotent POST after an upstream failure", async () => {
+    const runner = createRunner();
+    const definition: WorkflowDefinition = {
+      steps: [
+        {
+          id: "create-contact",
+          name: "create contact",
+          type: "http_request",
+          config: {
+            url: "https://example.test/contacts",
+            method: "POST",
+            idempotency: { mode: "execution_step" },
+          },
+        },
+      ],
+    };
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("unavailable", { status: 503 }));
+
+    await expect(
+      runner.run({ executionId: "execution-1", payload: {}, definition }),
+    ).rejects.toMatchObject({
+      code: "http_upstream_error",
+      retryable: true,
     });
     fetchMock.mockRestore();
   });
@@ -146,15 +255,15 @@ describe("WorkflowExecutionRunner", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("bad", { status: 503 }));
 
-    await expect(runner.run({ payload: {}, definition })).rejects.toMatchObject(
-      {
+    await expect(
+      runner.run({ executionId: "execution-1", payload: {}, definition }),
+    ).rejects.toMatchObject({
         code: "http_upstream_error",
         category: "upstream",
         message: "HTTP step http-1 failed with 503",
         retryable: true,
         httpStatus: 503,
-      },
-    );
+    });
     fetchMock.mockRestore();
   });
 
@@ -177,14 +286,14 @@ describe("WorkflowExecutionRunner", () => {
       }),
     );
 
-    await expect(runner.run({ payload: {}, definition })).rejects.toMatchObject(
-      {
+    await expect(
+      runner.run({ executionId: "execution-1", payload: {}, definition }),
+    ).rejects.toMatchObject({
         code: "http_rate_limited",
         category: "rate_limit",
         retryable: true,
         retryAfterMs: 15_000,
-      },
-    );
+    });
     fetchMock.mockRestore();
   });
 
@@ -193,6 +302,7 @@ describe("WorkflowExecutionRunner", () => {
     const completed: unknown[] = [];
 
     const result = await runner.run({
+      executionId: "execution-1",
       payload: {},
       definition: {
         steps: [
@@ -215,11 +325,60 @@ describe("WorkflowExecutionRunner", () => {
     expect(completed).toEqual([{ durationMs: 1 }]);
   });
 
+  it("resumes from a durable checkpoint without replaying completed steps", async () => {
+    const runner = createRunner();
+    const started: string[] = [];
+
+    const result = await runner.run({
+      executionId: "execution-1",
+      payload: {},
+      definition: {
+        steps: [
+          {
+            id: "already-completed",
+            name: "already completed",
+            type: "transform",
+            config: { assignments: { customerId: "wrong-value" } },
+          },
+          {
+            id: "resume-here",
+            name: "resume here",
+            type: "transform",
+            config: {
+              assignments: {
+                copiedCustomerId: "{{ variables.customerId }}",
+              },
+            },
+          },
+        ],
+      },
+      startStepIndex: 1,
+      checkpoint: {
+        variables: { customerId: "customer-42" },
+        steps: {
+          "already-completed": { output: { customerId: "customer-42" } },
+        },
+      },
+      lifecycle: {
+        onStarted: async (step) => {
+          started.push(step.id);
+        },
+      },
+    });
+
+    expect(started).toEqual(["resume-here"]);
+    expect(result.output.variables).toMatchObject({
+      customerId: "customer-42",
+      copiedCustomerId: "customer-42",
+    });
+  });
+
   it("rejects a workflow that exceeds the configured step limit", async () => {
     const runner = createRunner();
 
     await expect(
       runner.run({
+        executionId: "execution-1",
         payload: {},
         definition: {
           steps: [
@@ -247,6 +406,7 @@ describe("WorkflowExecutionRunner", () => {
 
     await expect(
       runner.run({
+        executionId: "execution-1",
         payload: {},
         definition: {
           steps: [

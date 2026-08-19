@@ -6,6 +6,8 @@ import type {
 import { Injectable } from "@nestjs/common";
 import {
   createExecutionRuntimeContext,
+  isRecord,
+  type ExecutionCheckpoint,
   type ExecutionRuntimeContext,
 } from "./runtime/execution-runtime-context";
 import { StepExecutorRegistry } from "./runtime/step-executor.registry";
@@ -15,8 +17,11 @@ import {
 } from "./runtime/workflow-runtime.error";
 
 type RunnerInput = {
+  executionId: string;
   payload: unknown;
   definition: unknown;
+  startStepIndex?: number;
+  checkpoint?: unknown;
   lifecycle?: StepLifecycleCallbacks;
   limits?: ExecutionRuntimeLimits;
   isCancellationRequested?: () => Promise<boolean>;
@@ -94,11 +99,27 @@ export class WorkflowExecutionRunner {
       });
     }
 
-    const context = createExecutionRuntimeContext(input.payload);
+    const startStepIndex = input.startStepIndex ?? 0;
+    if (startStepIndex < 0 || startStepIndex > definition.steps.length) {
+      throw new WorkflowRuntimeError({
+        code: "workflow_definition_invalid",
+        category: "validation",
+        message: `Recovery start step ${startStepIndex} is outside the workflow`,
+        retryable: false,
+      });
+    }
+    const context = createExecutionRuntimeContext(
+      input.executionId,
+      input.payload,
+      this.parseCheckpoint(input.checkpoint),
+    );
     const deadline = Date.now() + limits.maxDurationMs;
     let executedSteps = 0;
 
-    for (const [index, step] of definition.steps.entries()) {
+    for (const [relativeIndex, step] of definition.steps
+      .slice(startStepIndex)
+      .entries()) {
+      const index = startStepIndex + relativeIndex;
       if (await input.isCancellationRequested?.()) {
         throw new ExecutionCancelledError();
       }
@@ -140,6 +161,27 @@ export class WorkflowExecutionRunner {
     }
 
     return { output: context, executedSteps };
+  }
+
+  private parseCheckpoint(value: unknown): ExecutionCheckpoint | undefined {
+    if (value === null || value === undefined) return undefined;
+    if (
+      !isRecord(value) ||
+      !isRecord(value.variables) ||
+      !isRecord(value.steps)
+    ) {
+      throw new WorkflowRuntimeError({
+        code: "workflow_definition_invalid",
+        category: "validation",
+        message: "Execution recovery checkpoint is invalid",
+        retryable: false,
+      });
+    }
+
+    return {
+      variables: value.variables,
+      steps: value.steps as ExecutionCheckpoint["steps"],
+    };
   }
 
   private parseDefinition(value: unknown): WorkflowDefinition {

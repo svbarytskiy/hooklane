@@ -75,7 +75,9 @@ describe("WorkflowExecutionProcessor", () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
-      startAttempt: jest.fn().mockResolvedValue("attempt-1"),
+      startAttempt: jest
+        .fn()
+        .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),
       loadExecutionContext: jest.fn().mockResolvedValue({
         executionId: "execution-1",
         payload: {},
@@ -107,7 +109,7 @@ describe("WorkflowExecutionProcessor", () => {
       },
     });
 
-    expect(database.startAttempt).toHaveBeenCalledWith("execution-1", 1);
+    expect(database.startAttempt).toHaveBeenCalledWith("execution-1");
     expect(database.completeAttempt).toHaveBeenCalledWith(
       "attempt-1",
       "succeeded",
@@ -119,7 +121,9 @@ describe("WorkflowExecutionProcessor", () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
-      startAttempt: jest.fn().mockResolvedValue("attempt-1"),
+      startAttempt: jest
+        .fn()
+        .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),
       loadExecutionContext: jest.fn().mockResolvedValue({
         executionId: "execution-1",
         payload: {},
@@ -167,7 +171,9 @@ describe("WorkflowExecutionProcessor", () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
-      startAttempt: jest.fn().mockResolvedValue("attempt-1"),
+      startAttempt: jest
+        .fn()
+        .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),
       loadExecutionContext: jest.fn().mockResolvedValue({
         executionId: "execution-1",
         payload: {},

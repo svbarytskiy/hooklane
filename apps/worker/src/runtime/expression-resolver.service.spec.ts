@@ -6,7 +6,7 @@ import { ExpressionResolverService } from "./expression-resolver.service";
 describe("ExpressionResolverService", () => {
   it("resolves explicit roots and retains non-string template values", () => {
     const resolver = new ExpressionResolverService();
-    const context = createExecutionRuntimeContext({
+    const context = createExecutionRuntimeContext("execution-1", {
       order: { id: "order-42" },
     });
     context.variables.total = 120;
@@ -30,7 +30,7 @@ describe("ExpressionResolverService", () => {
 
   it("keeps old payload paths working while definitions migrate", () => {
     const resolver = new ExpressionResolverService();
-    const context = createExecutionRuntimeContext({
+    const context = createExecutionRuntimeContext("execution-1", {
       order: { id: "order-42" },
     });
 
@@ -40,7 +40,7 @@ describe("ExpressionResolverService", () => {
 
   it("rejects an unavailable step output clearly", () => {
     const resolver = new ExpressionResolverService();
-    const context = createExecutionRuntimeContext({});
+    const context = createExecutionRuntimeContext("execution-1", {});
 
     expect(() =>
       resolver.resolveExpression("steps.missing.output.id", context),

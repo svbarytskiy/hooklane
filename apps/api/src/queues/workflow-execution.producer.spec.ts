@@ -22,7 +22,7 @@ describe('WorkflowExecutionProducer', () => {
       'execution:execution-1',
     );
     expect(queue.add).toHaveBeenCalledWith('execute-workflow', data, {
-      jobId: 'execution:execution-1',
+      jobId: 'execution:execution-1:run:0',
     });
   });
 
