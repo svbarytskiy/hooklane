@@ -1,8 +1,13 @@
+import type {
+  ExecutionNotificationData,
+  ExecutionNotificationType,
+} from "@hooklane/contracts";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
   executionAttempts,
+  executionNotificationOutbox,
   executionOutbox,
   executionRecoveries,
   executionSteps,
@@ -80,8 +85,45 @@ export function createExecutionRepository(
       executionSteps,
       executionOutbox,
       executionRecoveries,
+      executionNotificationOutbox,
     },
   });
+
+  type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+  async function appendNotification(
+    tx: Transaction,
+    executionId: string,
+    eventType: ExecutionNotificationType,
+    data: ExecutionNotificationData,
+  ): Promise<void> {
+    const [execution] = await tx
+      .update(executions)
+      .set({
+        eventSequence: sql`${executions.eventSequence} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(executions.id, executionId))
+      .returning({
+        id: executions.id,
+        workspaceId: executions.workspaceId,
+        workflowId: executions.workflowId,
+        sequence: executions.eventSequence,
+      });
+
+    if (!execution) {
+      throw new Error(`Execution ${executionId} was not found`);
+    }
+
+    await tx.insert(executionNotificationOutbox).values({
+      workspaceId: execution.workspaceId,
+      workflowId: execution.workflowId,
+      executionId: execution.id,
+      sequence: execution.sequence,
+      eventType,
+      data,
+    });
+  }
 
   return {
     async ping() {
@@ -123,71 +165,80 @@ export function createExecutionRepository(
     },
 
     async claimExecution(executionId) {
-      const [current] = await db
-        .select({ status: executions.status })
-        .from(executions)
-        .where(eq(executions.id, executionId))
-        .limit(1);
+      return db.transaction(async (tx) => {
+        const [current] = await tx
+          .select({ status: executions.status })
+          .from(executions)
+          .where(eq(executions.id, executionId))
+          .limit(1);
 
-      if (!current) {
-        throw new Error(`Execution ${executionId} was not found`);
-      }
+        if (!current) {
+          throw new Error(`Execution ${executionId} was not found`);
+        }
 
-      if (!["pending", "queued", "running"].includes(current.status)) {
-        return false;
-      }
+        if (!["pending", "queued", "running"].includes(current.status)) {
+          return false;
+        }
 
-      if (current.status === "running") {
-        const interrupted = {
-          code: "worker_interrupted",
-          category: "internal",
-          message: "Worker stopped before completing the attempt",
-          retryable: true,
-        };
-        await db
-          .update(executionSteps)
+        const recoveredFromInterruptedWorker = current.status === "running";
+        if (recoveredFromInterruptedWorker) {
+          const interrupted = {
+            code: "worker_interrupted",
+            category: "internal",
+            message: "Worker stopped before completing the attempt",
+            retryable: true,
+          };
+          await tx
+            .update(executionSteps)
+            .set({
+              status: "failed",
+              error: interrupted,
+              completedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(executionSteps.executionId, executionId),
+                eq(executionSteps.status, "running"),
+              ),
+            );
+          await tx
+            .update(executionAttempts)
+            .set({
+              status: "failed",
+              error: interrupted,
+              completedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(executionAttempts.executionId, executionId),
+                eq(executionAttempts.status, "running"),
+              ),
+            );
+        }
+
+        const claimed = await tx
+          .update(executions)
           .set({
-            status: "failed",
-            error: interrupted,
-            completedAt: new Date(),
+            status: "running",
+            startedAt: new Date(),
+            updatedAt: new Date(),
           })
           .where(
             and(
-              eq(executionSteps.executionId, executionId),
-              eq(executionSteps.status, "running"),
+              eq(executions.id, executionId),
+              inArray(executions.status, ["pending", "queued", "running"]),
             ),
-          );
-        await db
-          .update(executionAttempts)
-          .set({
-            status: "failed",
-            error: interrupted,
-            completedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(executionAttempts.executionId, executionId),
-              eq(executionAttempts.status, "running"),
-            ),
-          );
-      }
+          )
+          .returning({ id: executions.id });
 
-      const claimed = await db
-        .update(executions)
-        .set({
-          status: "running",
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(executions.id, executionId),
-            inArray(executions.status, ["pending", "queued", "running"]),
-          ),
-        )
-        .returning({ id: executions.id });
-
-      return claimed.length === 1;
+        if (claimed.length === 1) {
+          await appendNotification(tx, executionId, "execution.started", {
+            status: "running",
+            recoveredFromInterruptedWorker,
+          });
+        }
+        return claimed.length === 1;
+      });
     },
 
     async isExecutionCancelled(executionId) {
@@ -205,128 +256,227 @@ export function createExecutionRepository(
     },
 
     async markSucceeded(executionId) {
-      await db
-        .update(executions)
-        .set({
-          status: "succeeded",
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(executions.id, executionId), eq(executions.status, "running")),
-        );
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(executions)
+          .set({
+            status: "succeeded",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executions.id, executionId),
+              eq(executions.status, "running"),
+            ),
+          )
+          .returning({ id: executions.id });
+        if (updated.length === 1) {
+          await appendNotification(tx, executionId, "execution.succeeded", {
+            status: "succeeded",
+          });
+        }
+      });
     },
 
     async markFailed(executionId, failure) {
-      await db
-        .update(executions)
-        .set({
-          status: "failed",
-          failure,
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(executions.id, executionId), eq(executions.status, "running")),
-        );
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(executions)
+          .set({
+            status: "failed",
+            failure,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executions.id, executionId),
+              eq(executions.status, "running"),
+            ),
+          )
+          .returning({ id: executions.id });
+        if (updated.length === 1) {
+          await appendNotification(tx, executionId, "execution.failed", {
+            status: "failed",
+          });
+        }
+      });
     },
 
     async markRetryableFailure(executionId, failure) {
-      await db
-        .update(executions)
-        .set({
-          status: "queued",
-          failure,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(executions.id, executionId), eq(executions.status, "running")),
-        );
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(executions)
+          .set({
+            status: "queued",
+            failure,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executions.id, executionId),
+              eq(executions.status, "running"),
+            ),
+          )
+          .returning({ id: executions.id });
+        if (updated.length === 1) {
+          await appendNotification(
+            tx,
+            executionId,
+            "execution.retry_scheduled",
+            { status: "queued" },
+          );
+        }
+      });
     },
 
     async startAttempt(executionId) {
-      const [attempt] = await db
-        .insert(executionAttempts)
-        .values({
-          executionId,
-          attemptNumber: sql<number>`(
-            select coalesce(max(${executionAttempts.attemptNumber}), 0) + 1
-            from ${executionAttempts}
-            where ${executionAttempts.executionId} = ${executionId}
-          )`,
+      return db.transaction(async (tx) => {
+        const [attempt] = await tx
+          .insert(executionAttempts)
+          .values({
+            executionId,
+            attemptNumber: sql<number>`(
+              select coalesce(max(${executionAttempts.attemptNumber}), 0) + 1
+              from ${executionAttempts}
+              where ${executionAttempts.executionId} = ${executionId}
+            )`,
+            status: "running",
+            startedAt: new Date(),
+          })
+          .returning({
+            id: executionAttempts.id,
+            attemptNumber: executionAttempts.attemptNumber,
+          });
+
+        if (!attempt) {
+          throw new Error(
+            `Attempt for execution ${executionId} was not created`,
+          );
+        }
+        await appendNotification(tx, executionId, "execution.attempt.started", {
+          attemptId: attempt.id,
+          attemptNumber: attempt.attemptNumber,
           status: "running",
-          startedAt: new Date(),
-        })
-        .returning({
-          id: executionAttempts.id,
-          attemptNumber: executionAttempts.attemptNumber,
         });
-
-      if (!attempt) {
-        throw new Error(`Attempt for execution ${executionId} was not created`);
-      }
-
-      return attempt;
+        return attempt;
+      });
     },
 
     async completeAttempt(attemptId, status, error) {
-      await db
-        .update(executionAttempts)
-        .set({ status, completedAt: new Date(), error: error ?? null })
-        .where(
-          and(
-            eq(executionAttempts.id, attemptId),
-            eq(executionAttempts.status, "running"),
-          ),
-        );
+      await db.transaction(async (tx) => {
+        const [attempt] = await tx
+          .update(executionAttempts)
+          .set({ status, completedAt: new Date(), error: error ?? null })
+          .where(
+            and(
+              eq(executionAttempts.id, attemptId),
+              eq(executionAttempts.status, "running"),
+            ),
+          )
+          .returning({
+            executionId: executionAttempts.executionId,
+            attemptNumber: executionAttempts.attemptNumber,
+          });
+        if (attempt) {
+          await appendNotification(
+            tx,
+            attempt.executionId,
+            status === "succeeded"
+              ? "execution.attempt.succeeded"
+              : "execution.attempt.failed",
+            { attemptId, attemptNumber: attempt.attemptNumber, status },
+          );
+        }
+      });
     },
 
     async startStep(executionId, attemptId, stepId, stepIndex, input) {
-      const [step] = await db
-        .insert(executionSteps)
-        .values({
-          executionId,
+      return db.transaction(async (tx) => {
+        const [step] = await tx
+          .insert(executionSteps)
+          .values({
+            executionId,
+            attemptId,
+            stepId,
+            stepIndex,
+            status: "running",
+            input: input ?? null,
+            startedAt: new Date(),
+          })
+          .returning({ id: executionSteps.id });
+
+        if (!step) throw new Error(`Step ${stepId} was not created`);
+        await appendNotification(tx, executionId, "execution.step.started", {
           attemptId,
           stepId,
           stepIndex,
           status: "running",
-          input: input ?? null,
-          startedAt: new Date(),
-        })
-        .returning({ id: executionSteps.id });
-
-      if (!step) throw new Error(`Step ${stepId} was not created`);
-      return step.id;
+        });
+        return step.id;
+      });
     },
 
     async completeStep(stepRecordId, status, output, error) {
-      await db
-        .update(executionSteps)
-        .set({
-          status,
-          output: output ?? null,
-          error: error ?? null,
-          completedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(executionSteps.id, stepRecordId),
-            eq(executionSteps.status, "running"),
-          ),
-        );
+      await db.transaction(async (tx) => {
+        const [step] = await tx
+          .update(executionSteps)
+          .set({
+            status,
+            output: output ?? null,
+            error: error ?? null,
+            completedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(executionSteps.id, stepRecordId),
+              eq(executionSteps.status, "running"),
+            ),
+          )
+          .returning({
+            executionId: executionSteps.executionId,
+            attemptId: executionSteps.attemptId,
+            stepId: executionSteps.stepId,
+            stepIndex: executionSteps.stepIndex,
+          });
+        if (step) {
+          await appendNotification(
+            tx,
+            step.executionId,
+            status === "succeeded"
+              ? "execution.step.succeeded"
+              : "execution.step.failed",
+            {
+              attemptId: step.attemptId,
+              stepId: step.stepId,
+              stepIndex: step.stepIndex,
+              status,
+            },
+          );
+        }
+      });
     },
 
     async skipStep(executionId, attemptId, stepId, stepIndex, input) {
       const now = new Date();
-      await db.insert(executionSteps).values({
-        executionId,
-        attemptId,
-        stepId,
-        stepIndex,
-        status: "skipped",
-        input: input ?? null,
-        startedAt: now,
-        completedAt: now,
+      await db.transaction(async (tx) => {
+        await tx.insert(executionSteps).values({
+          executionId,
+          attemptId,
+          stepId,
+          stepIndex,
+          status: "skipped",
+          input: input ?? null,
+          startedAt: now,
+          completedAt: now,
+        });
+        await appendNotification(tx, executionId, "execution.step.skipped", {
+          attemptId,
+          stepId,
+          stepIndex,
+          status: "skipped",
+        });
       });
     },
 

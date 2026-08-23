@@ -36,6 +36,8 @@ import {
 import { useExecutionQuery } from "../api/use-execution-query";
 import { useExecutionsQuery } from "../api/use-executions-query";
 import { executionQueryKeys } from "../model/execution-query-keys";
+import { useAuthSession } from "../../auth/model/use-auth-session";
+import { useExecutionRealtime } from "../realtime/use-execution-realtime";
 
 const statusColor: Record<ExecutionStatus | "skipped", string> = {
   pending: "gray",
@@ -326,6 +328,13 @@ export function ExecutionHistoryPanel({
   isAuthenticated: boolean;
   canCancel: boolean;
 }) {
+  const { accessToken } = useAuthSession();
+  const realtimeStatus = useExecutionRealtime({
+    workspaceId,
+    workflowId,
+    accessToken,
+    enabled: isAuthenticated,
+  });
   const executions = useExecutionsQuery(
     workspaceId,
     workflowId,
@@ -409,6 +418,18 @@ export function ExecutionHistoryPanel({
       if ("sourceExecutionId" in response) setSelectedId(response.executionId);
     },
   });
+  const realtimeLabel =
+    realtimeStatus === "connected"
+      ? "Live"
+      : realtimeStatus === "error"
+        ? "Offline"
+        : "Reconnecting";
+  const realtimeColor =
+    realtimeStatus === "connected"
+      ? "teal"
+      : realtimeStatus === "error"
+        ? "red"
+        : "yellow";
 
   return (
     <Card withBorder radius="lg" padding="lg">
@@ -416,10 +437,23 @@ export function ExecutionHistoryPanel({
         <div>
           <Title order={3}>Execution history</Title>
           <Text size="sm" c="dimmed">
-            Worker attempts and step-by-step results. Active runs refresh
-            automatically.
+            Worker attempts and step-by-step results. PostgreSQL remains the
+            source of truth.
           </Text>
         </div>
+        <Tooltip
+          label={
+            realtimeStatus === "connected"
+              ? "Live execution updates are connected"
+              : realtimeStatus === "error"
+                ? "Live updates failed; periodic refresh remains active"
+                : "Live updates are reconnecting; periodic refresh remains active"
+          }
+        >
+          <Badge variant="light" color={realtimeColor}>
+            {realtimeLabel}
+          </Badge>
+        </Tooltip>
         <ActionIcon
           variant="subtle"
           onClick={() => void executions.refetch()}
@@ -454,9 +488,7 @@ export function ExecutionHistoryPanel({
               Average duration
             </Text>
             <Text fw={700}>
-              {formatDuration(
-                observability.data.executions.averageDurationMs,
-              )}
+              {formatDuration(observability.data.executions.averageDurationMs)}
             </Text>
           </Card>
           <Card withBorder padding="sm">
