@@ -32,3 +32,4 @@ export * from "./workflows.js";
 export * from "./webhooks.js";
 export * from "./queue-jobs.js";
 export * from "./execution-errors.js";
+export * from "./realtime.js";

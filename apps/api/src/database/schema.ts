@@ -854,6 +854,7 @@ export const executions = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
 
     failure: jsonb('failure'),
+    eventSequence: integer('event_sequence').notNull().default(0),
     runSequence: integer('run_sequence').notNull().default(0),
     replayedFromExecutionId: uuid('replayed_from_execution_id'),
     activeRecoveryId: uuid('active_recovery_id'),
@@ -973,5 +974,48 @@ export const executionRecoveries = pgTable(
     executionCreatedAtIdx: index(
       'execution_recoveries_execution_created_idx',
     ).on(table.executionId, table.createdAt),
+  }),
+);
+
+export const executionNotificationOutbox = pgTable(
+  'execution_notification_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    executionId: uuid('execution_id')
+      .notNull()
+      .references(() => executions.id, { onDelete: 'cascade' }),
+    sequence: integer('sequence').notNull(),
+    eventType: text('event_type').notNull(),
+    data: jsonb('data').notNull().default({}),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+    claimToken: uuid('claim_token'),
+    claimExpiresAt: timestamp('claim_expires_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    executionSequenceUnique: uniqueIndex(
+      'execution_notification_outbox_execution_sequence_unique',
+    ).on(table.executionId, table.sequence),
+    pendingIdx: index('execution_notification_outbox_pending_idx').on(
+      table.status,
+      table.nextAttemptAt,
+      table.claimExpiresAt,
+      table.createdAt,
+    ),
+    publishedAtIdx: index('execution_notification_outbox_published_at_idx')
+      .on(table.publishedAt)
+      .where(sql`${table.status} = 'published'`),
   }),
 );

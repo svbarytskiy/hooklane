@@ -16,6 +16,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { QueuesModule } from './queues/queues.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { QueuesModule } from './queues/queues.module';
     WorkflowsModule,
     WebhooksModule,
     QueuesModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -21,6 +21,8 @@ export const incomingEvents = pgTable("incoming_events", {
 
 export const executions = pgTable("executions", {
   id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  workflowId: uuid("workflow_id").notNull(),
   status: text("status").notNull(),
   workflowVersionId: uuid("workflow_version_id").notNull(),
   incomingEventId: uuid("incoming_event_id").notNull(),
@@ -28,6 +30,7 @@ export const executions = pgTable("executions", {
   startedAt: timestamp("started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   failure: jsonb("failure"),
+  eventSequence: integer("event_sequence").notNull().default(0),
   runSequence: integer("run_sequence").notNull().default(0),
   activeRecoveryId: uuid("active_recovery_id"),
   replayedFromExecutionId: uuid("replayed_from_execution_id"),
@@ -110,6 +113,34 @@ export const executionOutbox = pgTable(
     executionUnique: uniqueIndex("execution_outbox_execution_id_key").on(
       table.executionId,
     ),
+  }),
+);
+
+export const executionNotificationOutbox = pgTable(
+  "execution_notification_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    workflowId: uuid("workflow_id").notNull(),
+    executionId: uuid("execution_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    eventType: text("event_type").notNull(),
+    data: jsonb("data").notNull().default({}),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    claimToken: uuid("claim_token"),
+    claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    executionSequenceUnique: uniqueIndex(
+      "execution_notification_outbox_execution_sequence_unique",
+    ).on(table.executionId, table.sequence),
   }),
 );
 
