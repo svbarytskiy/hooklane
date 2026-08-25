@@ -5,6 +5,7 @@ export type StepRuntimeState = {
 export type ExecutionRuntimeContext = {
   execution: {
     id: string;
+    workspaceId: string;
   };
   event: {
     payload: unknown;
@@ -21,10 +22,11 @@ export type ExecutionCheckpoint = Pick<
 export function createExecutionRuntimeContext(
   executionId: string,
   payload: unknown,
+  workspaceId?: string,
   checkpoint?: ExecutionCheckpoint,
 ): ExecutionRuntimeContext {
   return {
-    execution: { id: executionId },
+    execution: { id: executionId, workspaceId: workspaceId ?? "" },
     event: { payload },
     variables: { ...checkpoint?.variables },
     steps: { ...checkpoint?.steps },

@@ -22,6 +22,8 @@ import type {
   ConditionStep,
   DelayStep,
   HttpRequestStep,
+  IntegrationConnectionSummary,
+  SlackSendMessageStep,
   TransformStep,
   WorkflowDefinition,
   WorkflowStep,
@@ -41,6 +43,7 @@ import { useState } from "react";
 
 type WorkflowDraftEditorProps = {
   initialDefinition: WorkflowDefinition;
+  integrationConnections: IntegrationConnectionSummary[];
   validationErrors: WorkflowValidationError[];
   canEdit: boolean;
   isArchived: boolean;
@@ -84,6 +87,15 @@ function createStep(type: WorkflowStepType): WorkflowStep {
     } satisfies DelayStep;
   }
 
+  if (type === "slack_send_message") {
+    return {
+      id,
+      type,
+      name: "Send Slack message",
+      config: { connectionId: "", channel: "", text: "" },
+    } satisfies SlackSendMessageStep;
+  }
+
   return {
     id,
     type,
@@ -103,10 +115,12 @@ function replaceStepType(
 function StepConfigFields({
   step,
   disabled,
+  integrationConnections,
   onChange,
 }: {
   step: WorkflowStep;
   disabled: boolean;
+  integrationConnections: IntegrationConnectionSummary[];
   onChange: (step: WorkflowStep) => void;
 }) {
   if (step.type === "http_request") {
@@ -275,6 +289,65 @@ function StepConfigFields({
     );
   }
 
+  if (step.type === "slack_send_message") {
+    const slackConnections = integrationConnections.filter(
+      (connection) =>
+        connection.provider === "slack" && connection.status === "active",
+    );
+    return (
+      <Stack gap="sm">
+        <Select
+          label="Slack connection"
+          description="Only active connections in this workspace can be used."
+          placeholder="Choose a Slack connection"
+          searchable
+          nothingFoundMessage="No active Slack connection"
+          data={slackConnections.map((connection) => ({
+            value: connection.id,
+            label:
+              connection.providerAccountName ?? connection.providerAccountId,
+          }))}
+          value={step.config.connectionId}
+          disabled={disabled}
+          onChange={(connectionId) =>
+            connectionId &&
+            onChange({
+              ...step,
+              config: { ...step.config, connectionId },
+            })
+          }
+        />
+        <TextInput
+          label="Channel ID"
+          description="Use a Slack channel, group, or DM ID such as C01234567."
+          placeholder="C01234567"
+          value={step.config.channel}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({
+              ...step,
+              config: { ...step.config, channel: event.currentTarget.value },
+            })
+          }
+        />
+        <Textarea
+          label="Message"
+          description="Use {{ event.payload.orderId }} to insert a scalar value from the execution context."
+          value={step.config.text}
+          disabled={disabled}
+          minRows={3}
+          maxLength={4000}
+          onChange={(event) =>
+            onChange({
+              ...step,
+              config: { ...step.config, text: event.currentTarget.value },
+            })
+          }
+        />
+      </Stack>
+    );
+  }
+
   return (
     <Textarea
       label="Expression"
@@ -293,6 +366,7 @@ function StepConfigFields({
 
 export function WorkflowDraftEditor({
   initialDefinition,
+  integrationConnections,
   validationErrors,
   canEdit,
   isArchived,
@@ -470,6 +544,10 @@ export function WorkflowDraftEditor({
                       { value: "transform", label: "Transform" },
                       { value: "condition", label: "Condition" },
                       { value: "delay", label: "Delay" },
+                      {
+                        value: "slack_send_message",
+                        label: "Slack: send message",
+                      },
                     ]}
                     onChange={(type) =>
                       type &&
@@ -483,6 +561,7 @@ export function WorkflowDraftEditor({
                 <StepConfigFields
                   step={step}
                   disabled={disabled}
+                  integrationConnections={integrationConnections}
                   onChange={(nextStep) => updateStep(index, nextStep)}
                 />
                 {stepErrors.length > 0 && (
@@ -548,6 +627,17 @@ export function WorkflowDraftEditor({
             }
           >
             Add delay
+          </Button>
+          <Button
+            variant="light"
+            onClick={() =>
+              setDefinition((current) => ({
+                ...current,
+                steps: [...current.steps, createStep("slack_send_message")],
+              }))
+            }
+          >
+            Add Slack message
           </Button>
         </Group>
       )}

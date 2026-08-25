@@ -1,0 +1,19 @@
+{
+  "name": "@hooklane/integrations",
+  "version": "1.0.0",
+  "description": "Provider clients and provider-neutral integration primitives.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "type": "commonjs",
+  "private": true
+}

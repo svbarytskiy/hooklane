@@ -5,6 +5,7 @@ const supportedStepTypes = new Set([
   'transform',
   'condition',
   'delay',
+  'slack_send_message',
 ]);
 const supportedHttpMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const httpHeaderNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -195,6 +196,48 @@ function validateDelayConfig(
   }
 }
 
+function validateSlackSendMessageConfig(
+  config: Record<string, unknown>,
+  path: string,
+  errors: WorkflowValidationError[],
+) {
+  if (
+    typeof config.connectionId !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      config.connectionId,
+    )
+  ) {
+    errors.push({
+      path: `${path}.connectionId`,
+      code: 'invalid_value',
+      message: 'Slack connection id must be a UUID',
+    });
+  }
+
+  if (
+    typeof config.channel !== 'string' ||
+    !/^[CGD][A-Z0-9]{8,}$/.test(config.channel.trim())
+  ) {
+    errors.push({
+      path: `${path}.channel`,
+      code: 'invalid_value',
+      message: 'Slack channel must be a channel, group, or DM ID',
+    });
+  }
+
+  if (
+    typeof config.text !== 'string' ||
+    config.text.trim().length === 0 ||
+    config.text.length > 4_000
+  ) {
+    errors.push({
+      path: `${path}.text`,
+      code: 'invalid_value',
+      message: 'Slack message text must contain 1 to 4000 characters',
+    });
+  }
+}
+
 export function validateWorkflowDefinition(
   definition: unknown,
 ): WorkflowValidationError[] {
@@ -298,6 +341,10 @@ export function validateWorkflowDefinition(
 
     if (step.type === 'delay') {
       validateDelayConfig(step.config, `${path}.config`, errors);
+    }
+
+    if (step.type === 'slack_send_message') {
+      validateSlackSendMessageConfig(step.config, `${path}.config`, errors);
     }
   });
 

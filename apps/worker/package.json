@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hooklane/contracts": "1.0.0",
+    "@hooklane/integrations": "1.0.0",
     "@hooklane/queue": "1.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",

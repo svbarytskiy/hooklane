@@ -38,6 +38,20 @@ describe("ExpressionResolverService", () => {
     expect(resolver.resolveExpression("order.id", context)).toBe("order-42");
   });
 
+  it("interpolates scalar expressions into text templates", () => {
+    const resolver = new ExpressionResolverService();
+    const context = createExecutionRuntimeContext("execution-1", {
+      order: { id: "order-42" },
+    });
+
+    expect(
+      resolver.resolveTextTemplate(
+        "Order {{ event.payload.order.id }}",
+        context,
+      ),
+    ).toBe("Order order-42");
+  });
+
   it("rejects an unavailable step output clearly", () => {
     const resolver = new ExpressionResolverService();
     const context = createExecutionRuntimeContext("execution-1", {});

@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@hooklane/contracts": "1.0.0",
+    "@hooklane/integrations": "1.0.0",
     "@hooklane/queue": "1.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -80,6 +81,7 @@
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1",
       "^@hooklane/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts",
+      "^@hooklane/integrations$": "<rootDir>/../../../packages/integrations/dist/index.js",
       "^@hooklane/db$": "<rootDir>/../../../packages/db/src/index.ts",
       "^@hooklane/queue$": "<rootDir>/../../../packages/queue/src/index.ts"
     },

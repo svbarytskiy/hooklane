@@ -40,6 +40,26 @@ export class ExpressionResolverService {
     return this.resolvePath(path, context);
   }
 
+  resolveTextTemplate(
+    template: string,
+    context: ExecutionRuntimeContext,
+  ): string {
+    return template.replace(
+      /\{\{\s*(.+?)\s*\}\}/g,
+      (_match: string, expression: string) => {
+        const value = this.resolveExpression(expression, context);
+        if (value === null) return "null";
+        if (typeof value === "string") return value;
+        if (typeof value === "number" || typeof value === "boolean") {
+          return `${value}`;
+        }
+        throw new Error(
+          "Text template expressions must resolve to scalar values",
+        );
+      },
+    );
+  }
+
   private resolveLiteral(
     expression: string,
   ): { resolved: true; value: unknown } | { resolved: false } {

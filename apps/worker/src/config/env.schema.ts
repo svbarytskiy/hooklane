@@ -6,6 +6,15 @@ export const workerEnvSchema = z.object({
     .default("development"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().url(),
+  OAUTH_TOKENS_ENCRYPTION_KEY: z
+    .string()
+    .refine(
+      (value) => Buffer.from(value, "base64").length === 32,
+      "Must be a base64-encoded 32-byte key",
+    )
+    .optional(),
+  SLACK_CLIENT_ID: z.string().min(1).optional(),
+  SLACK_CLIENT_SECRET: z.string().min(1).optional(),
   WORKFLOW_QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(1),
   WORKFLOW_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
   WORKFLOW_BACKOFF_DELAY_MS: z.coerce.number().int().positive().default(1_000),

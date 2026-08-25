@@ -1,6 +1,10 @@
 /// <reference types="jest" />
 
 import type { WorkflowDefinition } from "@hooklane/contracts";
+
+jest.mock("@hooklane/db", () => ({
+  createExecutionRepository: jest.fn(),
+}));
 import { ConditionStepExecutor } from "./runtime/condition-step.executor";
 import { DelayStepExecutor } from "./runtime/delay-step.executor";
 import { ExpressionResolverService } from "./runtime/expression-resolver.service";
@@ -29,6 +33,7 @@ function createRunner() {
         { redact: (value: unknown) => value } as never,
       ),
       new DelayStepExecutor(),
+      { type: "slack_send_message", execute: jest.fn() } as never,
     ),
   );
 }

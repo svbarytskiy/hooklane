@@ -19,6 +19,25 @@ describe('validateWorkflowDefinition', () => {
     expect(validateWorkflowDefinition(validDefinition)).toEqual([]);
   });
 
+  it('accepts a Slack message with a connection, channel ID, and text template', () => {
+    expect(
+      validateWorkflowDefinition({
+        steps: [
+          {
+            id: 'notify-slack',
+            type: 'slack_send_message',
+            name: 'Notify Slack',
+            config: {
+              connectionId: '00000000-0000-4000-8000-000000000001',
+              channel: 'C0123456789',
+              text: 'Order {{ event.payload.orderId }} completed',
+            },
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   it('requires at least one step before publishing', () => {
     expect(validateWorkflowDefinition({ steps: [] })).toEqual([
       expect.objectContaining({ path: 'steps', code: 'min_length' }),
@@ -78,6 +97,12 @@ describe('validateWorkflowDefinition', () => {
           name: 'Wait',
           config: { durationMs: 0 },
         },
+        {
+          id: 'slack-message',
+          type: 'slack_send_message',
+          name: 'Notify Slack',
+          config: { connectionId: 'not-a-uuid', channel: 'general', text: '' },
+        },
       ],
     });
 
@@ -88,6 +113,9 @@ describe('validateWorkflowDefinition', () => {
         expect.objectContaining({ path: 'steps[1].config.assignments' }),
         expect.objectContaining({ path: 'steps[2].config.expression' }),
         expect.objectContaining({ path: 'steps[3].config.durationMs' }),
+        expect.objectContaining({ path: 'steps[4].config.connectionId' }),
+        expect.objectContaining({ path: 'steps[4].config.channel' }),
+        expect.objectContaining({ path: 'steps[4].config.text' }),
       ]),
     );
   });

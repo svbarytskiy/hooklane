@@ -33,3 +33,4 @@ export * from "./webhooks.js";
 export * from "./queue-jobs.js";
 export * from "./execution-errors.js";
 export * from "./realtime.js";
+export * from "./integrations.js";

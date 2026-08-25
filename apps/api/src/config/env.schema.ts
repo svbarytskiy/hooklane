@@ -58,6 +58,18 @@ export const envSchema = z.object({
       'password,token,secret,authorization,api_key,apikey,access_token,refresh_token,client_secret',
     ),
 
+  OAUTH_TOKENS_ENCRYPTION_KEY: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => Buffer.from(value, 'base64').length === 32,
+      'Must be a base64-encoded 32-byte key',
+    )
+    .optional(),
+  SLACK_CLIENT_ID: z.string().min(1).optional(),
+  SLACK_CLIENT_SECRET: z.string().min(1).optional(),
+  SLACK_OAUTH_REDIRECT_URI: z.string().url().optional(),
+
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
 

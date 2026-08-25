@@ -32,6 +32,14 @@ export const workflowExecutionErrorCodes = [
   "http_rate_limited",
   "http_upstream_error",
   "http_ambiguous_result",
+  "integration_connection_unavailable",
+  "integration_token_unavailable",
+  "slack_message_invalid",
+  "slack_authentication_failed",
+  "slack_authorization_failed",
+  "slack_rate_limited",
+  "slack_upstream_error",
+  "slack_ambiguous_result",
   "internal_error",
 ] as const;
 

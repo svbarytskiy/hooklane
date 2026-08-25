@@ -91,7 +91,7 @@ function ExecutionRow({
             Version {execution.workflowVersionId.slice(0, 8)} · event{" "}
             {execution.incomingEventId.slice(0, 8)}
           </Text>
-          {execution.failure && (
+          {execution.failure != null && (
             <Text size="xs" c="red">
               {JSON.stringify(execution.failure)}
             </Text>
@@ -229,7 +229,7 @@ function ExecutionDetailView({
                     {attempt.status}
                   </Badge>
                 </Group>
-                {attempt.error && (
+                {attempt.error != null && (
                   <Code block mt="xs">
                     {JSON.stringify(attempt.error, null, 2)}
                   </Code>

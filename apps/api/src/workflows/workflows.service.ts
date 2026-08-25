@@ -5,7 +5,11 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import type {
+  WorkflowDefinition,
+  WorkflowValidationError,
+} from '@hooklane/contracts';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DATABASE } from 'src/database/database.tokens';
 import type { Database } from 'src/database/database.types';
 import { isUniqueViolation } from 'src/database/postgres-error';
@@ -13,6 +17,7 @@ import {
   workflowAuditRecords,
   workflowVersions,
   workflows,
+  integrationConnections,
 } from 'src/database/schema';
 import { validateWorkflowDefinition } from './workflow-definition.validator';
 
@@ -241,7 +246,11 @@ export class WorkflowsService {
         throw new NotFoundException('Workflow draft not found');
       }
 
-      const errors = validateWorkflowDefinition(draft.definition);
+      const errors = await this.validateDefinition(
+        tx,
+        workspaceId,
+        draft.definition,
+      );
 
       await tx
         .update(workflowVersions)
@@ -280,7 +289,11 @@ export class WorkflowsService {
         throw new NotFoundException('Workflow draft not found');
       }
 
-      const errors = validateWorkflowDefinition(draft.definition);
+      const errors = await this.validateDefinition(
+        tx,
+        workspaceId,
+        draft.definition,
+      );
 
       if (errors.length > 0) {
         await tx
@@ -391,5 +404,62 @@ export class WorkflowsService {
 
       return archivedWorkflow;
     });
+  }
+
+  private async validateDefinition(
+    tx: Database,
+    workspaceId: string,
+    definition: unknown,
+  ): Promise<WorkflowValidationError[]> {
+    const errors = validateWorkflowDefinition(definition);
+    if (errors.length > 0) return errors;
+
+    const workflow = definition as WorkflowDefinition;
+    const slackSteps = workflow.steps
+      .map((step, index) => ({ step, index }))
+      .filter(
+        (
+          item,
+        ): item is {
+          step: Extract<
+            WorkflowDefinition['steps'][number],
+            {
+              type: 'slack_send_message';
+            }
+          >;
+          index: number;
+        } => item.step.type === 'slack_send_message',
+      );
+    if (slackSteps.length === 0) return errors;
+
+    const connectionIds = [
+      ...new Set(slackSteps.map(({ step }) => step.config.connectionId)),
+    ];
+    const connections = await tx
+      .select({ id: integrationConnections.id })
+      .from(integrationConnections)
+      .where(
+        and(
+          eq(integrationConnections.workspaceId, workspaceId),
+          eq(integrationConnections.provider, 'slack'),
+          eq(integrationConnections.status, 'active'),
+          inArray(integrationConnections.id, connectionIds),
+        ),
+      );
+    const activeConnectionIds = new Set(
+      connections.map((connection) => connection.id),
+    );
+
+    for (const { step, index } of slackSteps) {
+      if (!activeConnectionIds.has(step.config.connectionId)) {
+        errors.push({
+          path: `steps[${index}].config.connectionId`,
+          code: 'invalid_value',
+          message:
+            'Slack connection does not exist or is not active in this workspace',
+        });
+      }
+    }
+    return errors;
   }
 }

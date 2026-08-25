@@ -5,3 +5,4 @@ export type { Execution } from "./schema.js";
 export { createExecutionRepository } from "./execution-repository.js";
 export type { ExecutionRepository } from "./execution-repository.js";
 export type { ExecutionContext } from "./execution-repository.js";
+export type { ActiveSlackConnection } from "./execution-repository.js";

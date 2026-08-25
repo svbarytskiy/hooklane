@@ -3,7 +3,7 @@ export type WorkflowStatus = "active" | "archived";
 export type WorkflowVersionState = "draft" | "published";
 
 export type WorkflowStepType =
-  "http_request" | "transform" | "condition" | "delay";
+  "http_request" | "transform" | "condition" | "delay" | "slack_send_message";
 
 export type WorkflowDefinition = {
   steps: WorkflowStep[];
@@ -39,6 +39,12 @@ export type DelayStepConfig = {
   durationMs: number;
 };
 
+export type SlackSendMessageStepConfig = {
+  connectionId: string;
+  channel: string;
+  text: string;
+};
+
 export type HttpRequestStep = WorkflowStepBase<
   "http_request",
   HttpRequestStepConfig
@@ -50,8 +56,17 @@ export type ConditionStep = WorkflowStepBase<"condition", ConditionStepConfig>;
 
 export type DelayStep = WorkflowStepBase<"delay", DelayStepConfig>;
 
+export type SlackSendMessageStep = WorkflowStepBase<
+  "slack_send_message",
+  SlackSendMessageStepConfig
+>;
+
 export type WorkflowStep =
-  HttpRequestStep | TransformStep | ConditionStep | DelayStep;
+  | HttpRequestStep
+  | TransformStep
+  | ConditionStep
+  | DelayStep
+  | SlackSendMessageStep;
 
 export type WorkflowValidationError = {
   path: string;
