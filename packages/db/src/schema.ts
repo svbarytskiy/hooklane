@@ -19,6 +19,71 @@ export const incomingEvents = pgTable("incoming_events", {
   payload: jsonb("payload").notNull(),
 });
 
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    providerAccountEmail: text("provider_account_email"),
+    providerAccountName: text("provider_account_name"),
+    status: text("status").notNull().default("active"),
+    scopes: text("scopes").array().notNull().default([]),
+    accessTokenCiphertext: text("access_token_ciphertext").notNull(),
+    refreshTokenCiphertext: text("refresh_token_ciphertext"),
+    tokenKeyVersion: integer("token_key_version").notNull().default(1),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+    }),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workspaceProviderAccountUnique: uniqueIndex(
+      "integration_connections_workspace_provider_account_unique",
+    ).on(table.workspaceId, table.provider, table.providerAccountId),
+  }),
+);
+
+export const oauthAuthorizationStates = pgTable(
+  "oauth_authorization_states",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stateHash: text("state_hash").notNull(),
+    provider: text("provider").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    codeVerifierCiphertext: text("code_verifier_ciphertext").notNull(),
+    codeVerifierKeyVersion: integer("code_verifier_key_version")
+      .notNull()
+      .default(1),
+    redirectUri: text("redirect_uri").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    stateHashUnique: uniqueIndex(
+      "oauth_authorization_states_state_hash_unique",
+    ).on(table.stateHash),
+  }),
+);
+
 export const executions = pgTable("executions", {
   id: uuid("id").primaryKey(),
   workspaceId: uuid("workspace_id").notNull(),

@@ -24,7 +24,7 @@ export class RequestLoggingMiddleware implements NestMiddleware {
         event: 'http.request',
         requestId,
         method: request.method,
-        path: request.originalUrl,
+        path: request.path,
         statusCode: response.statusCode,
         durationMs,
         userAgent: request.get('user-agent') ?? null,

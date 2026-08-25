@@ -12,7 +12,7 @@
     "stop:redis": "docker compose stop redis",
     "logs:redis": "docker compose logs -f redis",
     "check:redis": "docker compose exec redis redis-cli ping",
-    "build:packages": "npm run build -w @hooklane/contracts && npm run build -w @hooklane/queue && npm run build -w @hooklane/db",
+    "build:packages": "npm run build -w @hooklane/contracts && npm run build -w @hooklane/queue && npm run build -w @hooklane/db && npm run build -w @hooklane/integrations",
     "build:api": "npm run build:packages && npm run build -w api",
     "build:worker": "npm run build:packages && npm run build -w worker",
     "test:worker": "npm test -w worker",
@@ -32,6 +32,7 @@
     "apps/web",
     "packages/db",
     "packages/contracts",
-    "packages/queue"
+    "packages/queue",
+    "packages/integrations"
   ]
 }

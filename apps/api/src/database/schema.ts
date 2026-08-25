@@ -564,6 +564,116 @@ export const workspaceMembers = pgTable(
   }),
 );
 
+export const integrationConnections = pgTable(
+  'integration_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    providerAccountId: text('provider_account_id').notNull(),
+    providerAccountEmail: text('provider_account_email'),
+    providerAccountName: text('provider_account_name'),
+    status: text('status').notNull().default('active'),
+    scopes: text('scopes').array().notNull().default([]),
+    accessTokenCiphertext: text('access_token_ciphertext').notNull(),
+    refreshTokenCiphertext: text('refresh_token_ciphertext'),
+    tokenKeyVersion: integer('token_key_version').notNull().default(1),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
+      withTimezone: true,
+    }),
+    lastRefreshedAt: timestamp('last_refreshed_at', { withTimezone: true }),
+    lastErrorCode: text('last_error_code'),
+    lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workspaceProviderAccountUnique: uniqueIndex(
+      'integration_connections_workspace_provider_account_unique',
+    ).on(table.workspaceId, table.provider, table.providerAccountId),
+    workspaceCreatedAtIdx: index(
+      'integration_connections_workspace_created_at_idx',
+    ).on(table.workspaceId, table.createdAt.desc()),
+    workspaceProviderStatusIdx: index(
+      'integration_connections_workspace_provider_status_idx',
+    ).on(table.workspaceId, table.provider, table.status),
+    providerAllowed: check(
+      'integration_connections_provider_allowed',
+      sql`${table.provider} in ('slack')`,
+    ),
+    statusAllowed: check(
+      'integration_connections_status_allowed',
+      sql`${table.status} in ('active', 'expired', 'revoked', 'needs_reconnect')`,
+    ),
+    tokenKeyVersionPositive: check(
+      'integration_connections_token_key_version_positive',
+      sql`${table.tokenKeyVersion} > 0`,
+    ),
+    revokedAtMatchesStatus: check(
+      'integration_connections_revoked_at_matches_status',
+      sql`(${table.status} = 'revoked' and ${table.revokedAt} is not null) or (${table.status} <> 'revoked' and ${table.revokedAt} is null)`,
+    ),
+  }),
+);
+
+export const oauthAuthorizationStates = pgTable(
+  'oauth_authorization_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    stateHash: text('state_hash').notNull(),
+    provider: text('provider').notNull(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    codeVerifierCiphertext: text('code_verifier_ciphertext').notNull(),
+    codeVerifierKeyVersion: integer('code_verifier_key_version')
+      .notNull()
+      .default(1),
+    redirectUri: text('redirect_uri').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    stateHashUnique: uniqueIndex(
+      'oauth_authorization_states_state_hash_unique',
+    ).on(table.stateHash),
+    pendingExpiryIdx: index('oauth_authorization_states_pending_expiry_idx')
+      .on(table.expiresAt)
+      .where(sql`${table.consumedAt} is null`),
+    providerAllowed: check(
+      'oauth_authorization_states_provider_allowed',
+      sql`${table.provider} in ('slack')`,
+    ),
+    codeVerifierKeyVersionPositive: check(
+      'oauth_authorization_states_code_verifier_key_version_positive',
+      sql`${table.codeVerifierKeyVersion} > 0`,
+    ),
+    expiresAfterCreation: check(
+      'oauth_authorization_states_expires_after_creation',
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+  }),
+);
+
 export const workflows = pgTable(
   'workflows',
   {

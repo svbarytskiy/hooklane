@@ -17,6 +17,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { QueuesModule } from './queues/queues.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     WebhooksModule,
     QueuesModule,
     RealtimeModule,
+    IntegrationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

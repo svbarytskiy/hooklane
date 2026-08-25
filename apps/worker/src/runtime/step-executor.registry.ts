@@ -6,6 +6,7 @@ import type { ExecutionRuntimeContext } from "./execution-runtime-context";
 import { HttpRequestStepExecutor } from "./http-request-step.executor";
 import type { StepExecutionResult, StepExecutor } from "./step-executor.types";
 import { TransformStepExecutor } from "./transform-step.executor";
+import { SlackSendMessageStepExecutor } from "./slack-send-message-step.executor";
 
 @Injectable()
 export class StepExecutorRegistry {
@@ -16,11 +17,13 @@ export class StepExecutorRegistry {
     condition: ConditionStepExecutor,
     httpRequest: HttpRequestStepExecutor,
     delay: DelayStepExecutor,
+    slackSendMessage: SlackSendMessageStepExecutor,
   ) {
     this.executors.set(transform.type, transform);
     this.executors.set(condition.type, condition);
     this.executors.set(httpRequest.type, httpRequest);
     this.executors.set(delay.type, delay);
+    this.executors.set(slackSendMessage.type, slackSendMessage);
   }
 
   execute(

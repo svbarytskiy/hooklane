@@ -11,6 +11,10 @@ import { HttpRequestStepExecutor } from "./runtime/http-request-step.executor";
 import { HttpRequestPolicyService } from "./runtime/http-request-policy.service";
 import { StepExecutorRegistry } from "./runtime/step-executor.registry";
 import { TransformStepExecutor } from "./runtime/transform-step.executor";
+import { OAuthTokenDecryptorService } from "./integrations/oauth-token-decryptor.service";
+import { IntegrationRefreshLockService } from "./integrations/integration-refresh-lock.service";
+import { SlackConnectionTokenService } from "./integrations/slack-connection-token.service";
+import { SlackSendMessageStepExecutor } from "./runtime/slack-send-message-step.executor";
 import {
   createWorkerPostgresClient,
   WORKER_POSTGRES_CLIENT,
@@ -35,10 +39,14 @@ import {
     ExpressionResolverService,
     ExecutionDataSanitizerService,
     HttpRequestPolicyService,
+    OAuthTokenDecryptorService,
+    IntegrationRefreshLockService,
+    SlackConnectionTokenService,
     TransformStepExecutor,
     ConditionStepExecutor,
     DelayStepExecutor,
     HttpRequestStepExecutor,
+    SlackSendMessageStepExecutor,
     StepExecutorRegistry,
     WorkflowExecutionProcessor,
     WorkflowExecutionRunner,

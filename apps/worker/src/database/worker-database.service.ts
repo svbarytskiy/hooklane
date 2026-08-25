@@ -2,6 +2,7 @@ import {
   createExecutionRepository,
   type ExecutionContext,
   type ExecutionRepository,
+  type ActiveSlackConnection,
 } from "@hooklane/db";
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -30,6 +31,41 @@ export class WorkerDatabaseService implements OnModuleDestroy {
 
   loadExecutionContext(executionId: string): Promise<ExecutionContext> {
     return this.repository.loadExecutionContext(executionId);
+  }
+
+  getActiveSlackConnection(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<ActiveSlackConnection | undefined> {
+    return this.repository.getActiveSlackConnection(workspaceId, connectionId);
+  }
+
+  updateRefreshedSlackConnection(
+    connectionId: string,
+    previousRefreshTokenCiphertext: string,
+    input: {
+      accessTokenCiphertext: string;
+      refreshTokenCiphertext: string;
+      tokenKeyVersion: number;
+      accessTokenExpiresAt: Date | null;
+      scopes: string[];
+    },
+  ): Promise<boolean> {
+    return this.repository.updateRefreshedSlackConnection(
+      connectionId,
+      previousRefreshTokenCiphertext,
+      input,
+    );
+  }
+
+  markSlackConnectionNeedsReconnect(
+    connectionId: string,
+    errorCode: string,
+  ): Promise<void> {
+    return this.repository.markSlackConnectionNeedsReconnect(
+      connectionId,
+      errorCode,
+    );
   }
 
   markSucceeded(executionId: string): Promise<void> {

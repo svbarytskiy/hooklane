@@ -12,16 +12,17 @@ import {
   TextInput,
   ThemeIcon,
   Title,
-} from '@mantine/core';
-import { useForm } from '@mantine/form';
-import { IconAlertCircle, IconBuilding, IconPlus } from '@tabler/icons-react';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuthSession } from '../../features/auth/model/use-auth-session';
-import { useCreateWorkspaceMutation } from '../../features/workspaces/api/use-create-workspace-mutation';
-import { useWorkspacesQuery } from '../../features/workspaces/api/use-workspaces-query';
-import { WorkspaceMembersPanel } from '../../features/workspaces/ui/WorkspaceMembersPanel';
-import { getApiErrorMessage } from '../../shared/api/api-error';
+} from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
+import { IconAlertCircle, IconBuilding, IconPlus } from "@tabler/icons-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuthSession } from "../../features/auth/model/use-auth-session";
+import { useCreateWorkspaceMutation } from "../../features/workspaces/api/use-create-workspace-mutation";
+import { useWorkspacesQuery } from "../../features/workspaces/api/use-workspaces-query";
+import { WorkspaceMembersPanel } from "../../features/workspaces/ui/WorkspaceMembersPanel";
+import { getApiErrorMessage } from "../../shared/api/api-error";
 
 type WorkspaceFormValues = {
   name: string;
@@ -32,13 +33,16 @@ function slugify(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 50);
 }
 
 export function WorkspacesPage() {
   const { accessToken } = useAuthSession();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const handledOAuthResult = useRef<string | null>(null);
   const workspacesQuery = useWorkspacesQuery(Boolean(accessToken));
   const createWorkspaceMutation = useCreateWorkspaceMutation();
   const [slugWasEdited, setSlugWasEdited] = useState(false);
@@ -46,21 +50,40 @@ export function WorkspacesPage() {
     null,
   );
   const form = useForm<WorkspaceFormValues>({
-    mode: 'uncontrolled',
-    initialValues: { name: '', slug: '' },
+    mode: "uncontrolled",
+    initialValues: { name: "", slug: "" },
     validate: {
       name: (value) =>
         value.trim().length === 0
-          ? 'Give your workspace a name'
+          ? "Give your workspace a name"
           : value.trim().length > 80
-            ? 'Use 80 characters or fewer'
+            ? "Use 80 characters or fewer"
             : null,
       slug: (value) =>
         /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
           ? null
-          : 'Use lowercase letters, numbers, and single hyphens',
+          : "Use lowercase letters, numbers, and single hyphens",
     },
   });
+
+  useEffect(() => {
+    const oauthResult = searchParams.get("oauth");
+
+    if (
+      oauthResult !== "slack_failed" ||
+      handledOAuthResult.current === oauthResult
+    ) {
+      return;
+    }
+
+    handledOAuthResult.current = oauthResult;
+    notifications.show({
+      color: "red",
+      title: "Slack connection was not completed",
+      message: "No connection was added. You can safely try again.",
+    });
+    navigate("/workspaces", { replace: true });
+  }, [navigate, searchParams]);
 
   if (!accessToken) {
     return (
@@ -112,13 +135,13 @@ export function WorkspacesPage() {
                 <TextInput
                   label="Workspace name"
                   placeholder="Acme Automations"
-                  key={form.key('name')}
-                  {...form.getInputProps('name')}
+                  key={form.key("name")}
+                  {...form.getInputProps("name")}
                   onChange={(event) => {
-                    form.getInputProps('name').onChange(event);
+                    form.getInputProps("name").onChange(event);
                     if (!slugWasEdited) {
                       form.setFieldValue(
-                        'slug',
+                        "slug",
                         slugify(event.currentTarget.value),
                       );
                     }
@@ -128,11 +151,11 @@ export function WorkspacesPage() {
                   label="Slug"
                   description="Used in URLs and internal identifiers."
                   placeholder="acme-automations"
-                  key={form.key('slug')}
-                  {...form.getInputProps('slug')}
+                  key={form.key("slug")}
+                  {...form.getInputProps("slug")}
                   onChange={(event) => {
                     setSlugWasEdited(true);
-                    form.getInputProps('slug').onChange(event);
+                    form.getInputProps("slug").onChange(event);
                   }}
                 />
                 <Group justify="flex-end">
@@ -168,7 +191,13 @@ export function WorkspacesPage() {
         !workspacesQuery.isError &&
         workspacesQuery.data?.length === 0 && (
           <Card withBorder radius="md" padding="xl" ta="center">
-            <ThemeIcon size={48} radius="xl" variant="light" color="gray" mx="auto">
+            <ThemeIcon
+              size={48}
+              radius="xl"
+              variant="light"
+              color="gray"
+              mx="auto"
+            >
               <IconBuilding size={24} />
             </ThemeIcon>
             <Title order={4} mt="md">
@@ -217,6 +246,16 @@ export function WorkspacesPage() {
                 ml="xs"
               >
                 Open workflows
+              </Button>
+              <Button
+                component={Link}
+                to={`/workspaces/${workspace.id}/integrations`}
+                variant="subtle"
+                color="violet"
+                mt="md"
+                ml="xs"
+              >
+                Integrations
               </Button>
             </Card>
           ))}

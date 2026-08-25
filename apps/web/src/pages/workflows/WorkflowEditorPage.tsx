@@ -31,6 +31,7 @@ import { WebhookEndpointsPanel } from "../../features/webhook-endpoints/ui/Webho
 import { WebhookDeliveryHistoryPanel } from "../../features/webhook-endpoints/ui/WebhookDeliveryHistoryPanel";
 import { ExecutionHistoryPanel } from "../../features/executions/ui/ExecutionHistoryPanel";
 import { useWorkspacesQuery } from "../../features/workspaces/api/use-workspaces-query";
+import { useIntegrationConnectionsQuery } from "../../features/integrations/api/use-integration-connections-query";
 import { getApiErrorMessage } from "../../shared/api/api-error";
 
 export function WorkflowEditorPage() {
@@ -39,6 +40,10 @@ export function WorkflowEditorPage() {
   const { accessToken } = useAuthSession();
   const isAuthenticated = Boolean(accessToken);
   const workspacesQuery = useWorkspacesQuery(isAuthenticated);
+  const integrationConnectionsQuery = useIntegrationConnectionsQuery(
+    workspaceId,
+    isAuthenticated,
+  );
   const workflowQuery = useWorkflowQuery(
     workspaceId,
     workflowId,
@@ -201,6 +206,7 @@ export function WorkflowEditorPage() {
         <WorkflowDraftEditor
           key={draft.id}
           initialDefinition={draft.definition}
+          integrationConnections={integrationConnectionsQuery.data ?? []}
           validationErrors={draft.validationErrors ?? []}
           canEdit={Boolean(canEdit)}
           isArchived={false}

@@ -13,15 +13,25 @@ import {
   executionSteps,
   executions,
   incomingEvents,
+  integrationConnections,
   workflowVersions,
 } from "./schema.js";
 
 export type ExecutionContext = {
   executionId: string;
+  workspaceId: string;
   payload: unknown;
   definition: unknown;
   startStepIndex: number;
   checkpoint: unknown;
+};
+
+export type ActiveSlackConnection = {
+  id: string;
+  accessTokenCiphertext: string;
+  refreshTokenCiphertext: string | null;
+  tokenKeyVersion: number;
+  accessTokenExpiresAt: Date | null;
 };
 
 export type ExecutionRepository = {
@@ -29,6 +39,25 @@ export type ExecutionRepository = {
   claimExecution(executionId: string): Promise<boolean>;
   isExecutionCancelled(executionId: string): Promise<boolean>;
   loadExecutionContext(executionId: string): Promise<ExecutionContext>;
+  getActiveSlackConnection(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<ActiveSlackConnection | undefined>;
+  updateRefreshedSlackConnection(
+    connectionId: string,
+    previousRefreshTokenCiphertext: string,
+    input: {
+      accessTokenCiphertext: string;
+      refreshTokenCiphertext: string;
+      tokenKeyVersion: number;
+      accessTokenExpiresAt: Date | null;
+      scopes: string[];
+    },
+  ): Promise<boolean>;
+  markSlackConnectionNeedsReconnect(
+    connectionId: string,
+    errorCode: string,
+  ): Promise<void>;
   markSucceeded(executionId: string): Promise<void>;
   markFailed(executionId: string, failure: { message: string }): Promise<void>;
   markRetryableFailure(
@@ -80,6 +109,7 @@ export function createExecutionRepository(
     schema: {
       executions,
       incomingEvents,
+      integrationConnections,
       workflowVersions,
       executionAttempts,
       executionSteps,
@@ -133,6 +163,7 @@ export function createExecutionRepository(
       const [context] = await db
         .select({
           executionId: executions.id,
+          workspaceId: executions.workspaceId,
           payload: incomingEvents.payload,
           definition: workflowVersions.definition,
           startStepIndex: executionRecoveries.startStepIndex,
@@ -162,6 +193,70 @@ export function createExecutionRepository(
         ...context,
         startStepIndex: context.startStepIndex ?? 0,
       };
+    },
+
+    async getActiveSlackConnection(workspaceId, connectionId) {
+      return db.query.integrationConnections.findFirst({
+        columns: {
+          id: true,
+          accessTokenCiphertext: true,
+          refreshTokenCiphertext: true,
+          tokenKeyVersion: true,
+          accessTokenExpiresAt: true,
+        },
+        where: and(
+          eq(integrationConnections.id, connectionId),
+          eq(integrationConnections.workspaceId, workspaceId),
+          eq(integrationConnections.provider, "slack"),
+          eq(integrationConnections.status, "active"),
+        ),
+      });
+    },
+
+    async updateRefreshedSlackConnection(
+      connectionId,
+      previousRefreshTokenCiphertext,
+      input,
+    ) {
+      const updated = await db
+        .update(integrationConnections)
+        .set({
+          ...input,
+          status: "active",
+          lastRefreshedAt: new Date(),
+          lastErrorCode: null,
+          lastErrorAt: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(integrationConnections.id, connectionId),
+            eq(integrationConnections.status, "active"),
+            eq(
+              integrationConnections.refreshTokenCiphertext,
+              previousRefreshTokenCiphertext,
+            ),
+          ),
+        )
+        .returning({ id: integrationConnections.id });
+      return updated.length === 1;
+    },
+
+    async markSlackConnectionNeedsReconnect(connectionId, errorCode) {
+      await db
+        .update(integrationConnections)
+        .set({
+          status: "needs_reconnect",
+          lastErrorCode: errorCode,
+          lastErrorAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(integrationConnections.id, connectionId),
+            eq(integrationConnections.status, "active"),
+          ),
+        );
     },
 
     async claimExecution(executionId) {

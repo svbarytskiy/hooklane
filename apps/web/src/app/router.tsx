@@ -11,6 +11,7 @@ import { DashboardPage } from "../pages/dashboard/DashboardPage";
 import { WorkspacesPage } from "../pages/workspaces/WorkspacesPage";
 import { WorkflowEditorPage } from "../pages/workflows/WorkflowEditorPage";
 import { WorkflowsPage } from "../pages/workflows/WorkflowsPage";
+import { WorkspaceIntegrationsPage } from "../pages/integrations/WorkspaceIntegrationsPage";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
       { path: "workspaces", element: <WorkspacesPage /> },
+      {
+        path: "workspaces/:workspaceId/integrations",
+        element: <WorkspaceIntegrationsPage />,
+      },
       {
         path: "workspaces/:workspaceId/workflows",
         element: <WorkflowsPage />,

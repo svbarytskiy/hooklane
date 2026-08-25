@@ -18,6 +18,7 @@ import {
 
 type RunnerInput = {
   executionId: string;
+  workspaceId?: string;
   payload: unknown;
   definition: unknown;
   startStepIndex?: number;
@@ -111,6 +112,7 @@ export class WorkflowExecutionRunner {
     const context = createExecutionRuntimeContext(
       input.executionId,
       input.payload,
+      input.workspaceId,
       this.parseCheckpoint(input.checkpoint),
     );
     const deadline = Date.now() + limits.maxDurationMs;
