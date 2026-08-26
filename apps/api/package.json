@@ -30,6 +30,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.2.1",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/websockets": "^11.2.1",
     "@supabase/supabase-js": "^2.110.0",
     "bullmq": "^6.0.10",

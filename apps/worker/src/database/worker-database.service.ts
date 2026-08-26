@@ -21,6 +21,16 @@ export class WorkerDatabaseService implements OnModuleDestroy {
     return this.repository.claimExecution(executionId);
   }
 
+  tryAcquireExecutionSlot(
+    executionId: string,
+  ): Promise<"acquired" | "concurrency_limit_reached" | "skipped"> {
+    return this.repository.tryAcquireExecutionSlot(executionId);
+  }
+
+  releaseExecutionSlot(executionId: string, terminal: boolean): Promise<void> {
+    return this.repository.releaseExecutionSlot(executionId, terminal);
+  }
+
   isExecutionCancelled(executionId: string): Promise<boolean> {
     return this.repository.isExecutionCancelled(executionId);
   }

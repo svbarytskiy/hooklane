@@ -6,6 +6,9 @@ import {
 import { WorkflowsService } from './workflows.service';
 
 describe('WorkflowsService', () => {
+  const workspaceQuota = {
+    assertCanPublishWorkflow: jest.fn().mockResolvedValue(undefined),
+  };
   const workspaceId = '00000000-0000-4000-8000-000000000001';
   const userId = '00000000-0000-4000-8000-000000000002';
   const workflow = {
@@ -53,7 +56,7 @@ describe('WorkflowsService', () => {
         callback(transaction),
       ),
     };
-    const service = new WorkflowsService(db as never);
+    const service = new WorkflowsService(db as never, workspaceQuota as never);
 
     await expect(
       service.createWorkflow(userId, workspaceId, workflow.name, workflow.slug),
@@ -85,7 +88,7 @@ describe('WorkflowsService', () => {
     const db = {
       transaction: jest.fn().mockRejectedValue({ code: '23505' }),
     };
-    const service = new WorkflowsService(db as never);
+    const service = new WorkflowsService(db as never, workspaceQuota as never);
 
     await expect(
       service.createWorkflow(userId, workspaceId, workflow.name, workflow.slug),
@@ -301,7 +304,7 @@ describe('WorkflowsService', () => {
         callback(transaction),
       ),
     };
-    const service = new WorkflowsService(db as never);
+    const service = new WorkflowsService(db as never, workspaceQuota as never);
 
     await expect(
       service.publishWorkflow(userId, workspaceId, workflow.id),

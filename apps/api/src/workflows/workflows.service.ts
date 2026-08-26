@@ -20,12 +20,14 @@ import {
   integrationConnections,
 } from 'src/database/schema';
 import { validateWorkflowDefinition } from './workflow-definition.validator';
+import { WorkspaceQuotaService } from 'src/entitlements/workspace-quota.service';
 
 @Injectable()
 export class WorkflowsService {
   constructor(
     @Inject(DATABASE)
     private readonly db: Database,
+    private readonly workspaceQuota: WorkspaceQuotaService = new WorkspaceQuotaService(),
   ) {}
 
   async createWorkflow(
@@ -303,6 +305,12 @@ export class WorkflowsService {
 
         return { errors };
       }
+
+      await this.workspaceQuota.assertCanPublishWorkflow(
+        tx,
+        workspaceId,
+        workflowId,
+      );
 
       const publishedAt = new Date();
       const [publishedVersion] = await tx

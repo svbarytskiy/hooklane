@@ -4,9 +4,10 @@ import { DatabaseModule } from 'src/database/database.module';
 import { WorkspacesModule } from 'src/workspaces/workspaces.module';
 import { WorkflowsService } from './workflows.service';
 import { WorkflowsController } from './workflows.controller';
+import { EntitlementsModule } from 'src/entitlements/entitlements.module';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, WorkspacesModule],
+  imports: [AuthModule, DatabaseModule, WorkspacesModule, EntitlementsModule],
   providers: [WorkflowsService],
   controllers: [WorkflowsController],
 })

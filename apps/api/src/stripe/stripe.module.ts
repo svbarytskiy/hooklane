@@ -9,9 +9,11 @@ import { DatabaseModule } from 'src/database/database.module';
 import { StripeWebhookProcessor } from './stripe-webhook-processor.service';
 import { InvoiceSyncService } from './invoice-sync.service';
 import { RefundService } from './refund.service';
+import { EntitlementsModule } from 'src/entitlements/entitlements.module';
+import { StripeEntitlementReconciliationService } from './stripe-entitlement-reconciliation.service';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, EntitlementsModule],
   controllers: [StripeWebhookController],
   providers: [
     {
@@ -29,6 +31,7 @@ import { RefundService } from './refund.service';
     StripeWebhookProcessor,
     InvoiceSyncService,
     RefundService,
+    StripeEntitlementReconciliationService,
   ],
   exports: [STRIPE_CLIENT, StripeWebhookService, RefundService],
 })

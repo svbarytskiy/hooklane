@@ -13,9 +13,10 @@ import { WebhookSecretCryptoService } from './webhook-secret-crypto.service';
 import { WebhookSignatureService } from './webhook-signature.service';
 import { ExecutionHistoryController } from './execution-history.controller';
 import { ExecutionHistoryService } from './execution-history.service';
+import { EntitlementsModule } from 'src/entitlements/entitlements.module';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, WorkspacesModule],
+  imports: [AuthModule, DatabaseModule, WorkspacesModule, EntitlementsModule],
   providers: [
     WebhookSecretCryptoService,
     WebhookSignatureService,

@@ -20,6 +20,7 @@ export class BillingCatalogService {
         stripePriceId: billingCatalog.stripePriceId,
         type: billingCatalog.type,
         creditsAmount: billingCatalog.creditsAmount,
+        billingPlanId: billingCatalog.billingPlanId,
       })
       .from(billingCatalog)
       .where(

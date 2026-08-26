@@ -6,6 +6,7 @@ import {
   Code,
   Group,
   SimpleGrid,
+  Select,
   Stack,
   Table,
   Text,
@@ -20,6 +21,7 @@ import {
   IconCrown,
   IconShoppingCart,
 } from "@tabler/icons-react";
+import { useState } from "react";
 import { useAuthSession } from "../../features/auth/model/use-auth-session";
 import { useBillingInvoicesQuery } from "../../features/billing/api/use-billing-invoices-query";
 import { useBillingPaymentsQuery } from "../../features/billing/api/use-billing-payments-query";
@@ -28,18 +30,11 @@ import { useBillingSubscriptionQuery } from "../../features/billing/api/use-bill
 import { useBillingUpcomingInvoiceQuery } from "../../features/billing/api/use-billing-upcoming-invoice-query";
 import { useCreateBillingPortalMutation } from "../../features/billing/api/use-create-billing-portal-mutation";
 import { useCreateCreditsCheckoutMutation } from "../../features/billing/api/use-create-credits-checkout-mutation";
-import { useCreateSubscriptionCheckoutMutation } from "../../features/billing/api/use-create-subscription-checkout-mutation";
+import { useCreateWorkspaceSubscriptionCheckoutMutation } from "../../features/billing/api/use-create-workspace-subscription-checkout-mutation";
 import { useCreditsBalanceQuery } from "../../features/billing/api/use-credits-balance-query";
+import { useWorkspaceEntitlementQuery } from "../../features/billing/api/use-workspace-entitlement-query";
+import { useWorkspacesQuery } from "../../features/workspaces/api/use-workspaces-query";
 import { getApiErrorMessage } from "../../shared/api/api-error";
-
-const CURRENT_SUBSCRIPTION_STATUSES = new Set([
-  "incomplete",
-  "trialing",
-  "active",
-  "past_due",
-  "unpaid",
-  "paused",
-]);
 
 const PAYMENT_RECOVERY_COPY: Record<
   string,
@@ -112,17 +107,29 @@ export function BillingOverviewPage() {
     useBillingUpcomingInvoiceQuery(isAuthenticated);
   const createCreditsCheckoutMutation = useCreateCreditsCheckoutMutation();
   const createBillingPortalMutation = useCreateBillingPortalMutation();
-  const createSubscriptionCheckoutMutation =
-    useCreateSubscriptionCheckoutMutation();
+  const workspacesQuery = useWorkspacesQuery(isAuthenticated);
+  const [billingWorkspaceId, setBillingWorkspaceId] = useState<string | null>(
+    null,
+  );
+  const workspaces = workspacesQuery.data ?? [];
+  const workspaceId = workspaces.some((item) => item.id === billingWorkspaceId)
+    ? billingWorkspaceId
+    : (workspaces[0]?.id ?? null);
+  const workspaceEntitlementQuery = useWorkspaceEntitlementQuery(
+    workspaceId,
+    isAuthenticated,
+  );
+  const createWorkspaceCheckoutMutation =
+    useCreateWorkspaceSubscriptionCheckoutMutation();
 
   const hasStripeCustomer = Boolean(billingStateQuery.data?.stripeCustomer);
   const payments = billingPaymentsQuery.data?.payments ?? [];
   const invoiceHistory = billingInvoicesQuery.data?.invoices ?? [];
   const upcomingInvoice = billingUpcomingInvoiceQuery.data?.invoice ?? null;
   const subscription = billingSubscriptionQuery.data?.subscription ?? null;
-  const hasCurrentSubscription = Boolean(
-    subscription && CURRENT_SUBSCRIPTION_STATUSES.has(subscription.status),
-  );
+  const hasCurrentSubscription =
+    workspaceEntitlementQuery.data?.source === "stripe_subscription" &&
+    workspaceEntitlementQuery.data.status !== "suspended";
   const paymentRecovery = subscription
     ? PAYMENT_RECOVERY_COPY[subscription.status]
     : undefined;
@@ -156,7 +163,9 @@ export function BillingOverviewPage() {
   };
 
   const handleSubscribe = () => {
-    createSubscriptionCheckoutMutation.mutate({
+    if (!workspaceId) return;
+    createWorkspaceCheckoutMutation.mutate({
+      workspaceId,
       productCode: "pro_monthly",
       idempotencyKey: crypto.randomUUID(),
     });
@@ -190,8 +199,10 @@ export function BillingOverviewPage() {
           <Button
             variant="light"
             leftSection={<IconCrown size={18} />}
-            disabled={!isAuthenticated || hasCurrentSubscription}
-            loading={createSubscriptionCheckoutMutation.isPending}
+            disabled={
+              !isAuthenticated || !workspaceId || hasCurrentSubscription
+            }
+            loading={createWorkspaceCheckoutMutation.isPending}
             onClick={handleSubscribe}
           >
             {hasCurrentSubscription
@@ -220,6 +231,53 @@ export function BillingOverviewPage() {
         <Alert color="red" title="Billing data could not be loaded">
           {getApiErrorMessage(billingError)}
         </Alert>
+      )}
+
+      {isAuthenticated && (
+        <Stack gap="sm" className="surface-panel">
+          <Group justify="space-between" align="end" wrap="wrap">
+            <Select
+              label="Workspace plan"
+              placeholder="Select workspace"
+              value={workspaceId}
+              onChange={(value) =>
+                setBillingWorkspaceId(typeof value === "string" ? value : null)
+              }
+              data={workspaces.map((workspace) => ({
+                value: workspace.id,
+                label: workspace.name,
+              }))}
+              w={{ base: "100%", sm: 320 }}
+              disabled={workspacesQuery.isLoading || workspaces.length === 0}
+            />
+            {workspaceEntitlementQuery.data && (
+              <Badge
+                color={
+                  workspaceEntitlementQuery.data.status === "active"
+                    ? "green"
+                    : "yellow"
+                }
+                variant="light"
+              >
+                {workspaceEntitlementQuery.data.plan.name} ·{" "}
+                {workspaceEntitlementQuery.data.status}
+              </Badge>
+            )}
+          </Group>
+          {workspaceEntitlementQuery.data && (
+            <Text size="sm" c="dimmed">
+              {workspaceEntitlementQuery.data.plan.limits.maxPublishedWorkflows}{" "}
+              workflows ·{" "}
+              {workspaceEntitlementQuery.data.plan.limits.maxIntegrations}{" "}
+              integrations ·{" "}
+              {
+                workspaceEntitlementQuery.data.plan.limits
+                  .maxExecutionsPerPeriod
+              }{" "}
+              executions per period
+            </Text>
+          )}
+        </Stack>
       )}
 
       {isAuthenticated && paymentRecovery && (

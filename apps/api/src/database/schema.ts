@@ -174,6 +174,10 @@ export const billingCatalog = pgTable(
 
     creditsAmount: integer('credits_amount'),
 
+    billingPlanId: uuid('billing_plan_id').references(() => billingPlans.id, {
+      onDelete: 'restrict',
+    }),
+
     active: boolean('active').notNull().default(true),
 
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -560,6 +564,191 @@ export const workspaceMembers = pgTable(
     roleAllowed: check(
       'workspace_members_role_allowed',
       sql`${table.role} in ('owner', 'admin', 'member')`,
+    ),
+  }),
+);
+
+export const billingPlans = pgTable(
+  'billing_plans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull(),
+    version: integer('version').notNull(),
+    name: text('name').notNull(),
+    maxPublishedWorkflows: integer('max_published_workflows').notNull(),
+    maxIntegrations: integer('max_integrations').notNull(),
+    maxExecutionsPerPeriod: integer('max_executions_per_period').notNull(),
+    maxConcurrentExecutions: integer('max_concurrent_executions').notNull(),
+    executionRetentionDays: integer('execution_retention_days').notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    codeVersionUnique: unique('billing_plans_code_version_unique').on(
+      table.code,
+      table.version,
+    ),
+    activeIdx: index('billing_plans_active_idx').on(table.active),
+  }),
+);
+
+export const workspaceBillingAccounts = pgTable(
+  'workspace_billing_accounts',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    billingOwnerUserId: uuid('billing_owner_user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'restrict' }),
+    stripeCustomerId: text('stripe_customer_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    ownerUserIdIdx: index('workspace_billing_accounts_owner_user_id_idx').on(
+      table.billingOwnerUserId,
+    ),
+    stripeCustomerIdIdx: index(
+      'workspace_billing_accounts_stripe_customer_id_idx',
+    )
+      .on(table.stripeCustomerId)
+      .where(sql`${table.stripeCustomerId} is not null`),
+  }),
+);
+
+export const workspaceEntitlements = pgTable(
+  'workspace_entitlements',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    billingPlanId: uuid('billing_plan_id')
+      .notNull()
+      .references(() => billingPlans.id, { onDelete: 'restrict' }),
+    source: text('source').notNull().default('free'),
+    status: text('status').notNull().default('active'),
+    stripeSubscriptionId: text('stripe_subscription_id').unique(),
+    currentPeriodStart: timestamp('current_period_start', {
+      withTimezone: true,
+    }),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    graceEndsAt: timestamp('grace_ends_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    billingPlanIdIdx: index('workspace_entitlements_billing_plan_id_idx').on(
+      table.billingPlanId,
+    ),
+    statusIdx: index('workspace_entitlements_status_idx').on(table.status),
+  }),
+);
+
+export const workspaceSubscriptionCheckoutAttempts = pgTable(
+  'workspace_subscription_checkout_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    stripeCheckoutSessionId: text('stripe_checkout_session_id').unique(),
+    checkoutUrl: text('checkout_url'),
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workspaceKeyUnique: unique(
+      'workspace_subscription_checkout_attempts_unique',
+    ).on(table.workspaceId, table.idempotencyKey),
+  }),
+);
+
+export const workspaceUsagePeriods = pgTable(
+  'workspace_usage_periods',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
+    periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
+    executionsReserved: integer('executions_reserved').notNull().default(0),
+    activeExecutions: integer('active_executions').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workspacePeriodUnique: unique(
+      'workspace_usage_periods_workspace_period',
+    ).on(table.workspaceId, table.periodStart),
+    workspacePeriodEndIdx: index(
+      'workspace_usage_periods_workspace_period_end_idx',
+    ).on(table.workspaceId, table.periodEnd),
+    periodValid: check(
+      'workspace_usage_periods_period_valid',
+      sql`${table.periodEnd} > ${table.periodStart}`,
+    ),
+    countsNonNegative: check(
+      'workspace_usage_periods_counts_non_negative',
+      sql`${table.executionsReserved} >= 0 and ${table.activeExecutions} >= 0`,
+    ),
+  }),
+);
+
+export const workspaceExecutionUsageReservations = pgTable(
+  'workspace_execution_usage_reservations',
+  {
+    executionId: uuid('execution_id')
+      .primaryKey()
+      .references(() => executions.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    usagePeriodId: uuid('usage_period_id')
+      .notNull()
+      .references(() => workspaceUsagePeriods.id, { onDelete: 'restrict' }),
+    status: text('status').notNull().default('reserved'),
+    reservedAt: timestamp('reserved_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    workspaceStatusIdx: index(
+      'workspace_execution_usage_reservations_workspace_status_idx',
+    ).on(table.workspaceId, table.status),
+    statusAllowed: check(
+      'workspace_execution_usage_reservations_status_allowed',
+      sql`${table.status} in ('reserved', 'running', 'completed', 'released')`,
+    ),
+    completedAtConsistent: check(
+      'workspace_execution_usage_reservations_completed_at_consistent',
+      sql`(${table.status} in ('reserved', 'running') and ${table.completedAt} is null) or (${table.status} in ('completed', 'released') and ${table.completedAt} is not null)`,
     ),
   }),
 );
