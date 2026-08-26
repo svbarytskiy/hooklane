@@ -12,42 +12,53 @@ import type {
   CreateOAuthAuthorizationStateInput,
   UpdateIntegrationConnectionTokensInput,
 } from './integration-connections.types';
+import { WorkspaceQuotaService } from 'src/entitlements/workspace-quota.service';
 
 @Injectable()
 export class IntegrationConnectionsRepository {
   constructor(
     @Inject(DATABASE)
     private readonly db: Database,
+    private readonly workspaceQuota: WorkspaceQuotaService = new WorkspaceQuotaService(),
   ) {}
 
   createConnection(input: CreateIntegrationConnectionInput) {
-    return this.db
-      .insert(integrationConnections)
-      .values(input)
-      .onConflictDoUpdate({
-        target: [
-          integrationConnections.workspaceId,
-          integrationConnections.provider,
-          integrationConnections.providerAccountId,
-        ],
-        set: {
-          providerAccountEmail: input.providerAccountEmail,
-          providerAccountName: input.providerAccountName,
-          status: 'active',
-          scopes: input.scopes,
-          accessTokenCiphertext: input.accessTokenCiphertext,
-          refreshTokenCiphertext: input.refreshTokenCiphertext,
-          tokenKeyVersion: input.tokenKeyVersion,
-          accessTokenExpiresAt: input.accessTokenExpiresAt,
-          refreshTokenExpiresAt: input.refreshTokenExpiresAt,
-          lastRefreshedAt: new Date(),
-          lastErrorCode: null,
-          lastErrorAt: null,
-          revokedAt: null,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+    return this.db.transaction(async (tx) => {
+      await this.workspaceQuota.assertCanActivateIntegration(
+        tx,
+        input.workspaceId,
+        input.provider,
+        input.providerAccountId,
+      );
+
+      return tx
+        .insert(integrationConnections)
+        .values(input)
+        .onConflictDoUpdate({
+          target: [
+            integrationConnections.workspaceId,
+            integrationConnections.provider,
+            integrationConnections.providerAccountId,
+          ],
+          set: {
+            providerAccountEmail: input.providerAccountEmail,
+            providerAccountName: input.providerAccountName,
+            status: 'active',
+            scopes: input.scopes,
+            accessTokenCiphertext: input.accessTokenCiphertext,
+            refreshTokenCiphertext: input.refreshTokenCiphertext,
+            tokenKeyVersion: input.tokenKeyVersion,
+            accessTokenExpiresAt: input.accessTokenExpiresAt,
+            refreshTokenExpiresAt: input.refreshTokenExpiresAt,
+            lastRefreshedAt: new Date(),
+            lastErrorCode: null,
+            lastErrorAt: null,
+            revokedAt: null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+    });
   }
 
   listConnections(workspaceId: string) {

@@ -455,7 +455,12 @@ export class ExecutionHistoryService {
       )
       .returning({ id: executions.id });
 
-    if (cancelled) return { id: cancelled.id, status: 'cancelled' };
+    if (cancelled) {
+      await this.db.execute(
+        sql`select public.release_workspace_execution_slot(${cancelled.id})`,
+      );
+      return { id: cancelled.id, status: 'cancelled' };
+    }
 
     const [execution] = await this.db
       .select({ id: executions.id })

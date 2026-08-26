@@ -71,6 +71,9 @@ function createService(
   const executionProducer = {
     enqueueExecution: jest.fn().mockResolvedValue('execution-1'),
   };
+  const workspaceQuota = {
+    reserveExecution: jest.fn().mockResolvedValue(undefined),
+  };
   const database = {
     ...db,
     update: jest.fn().mockReturnValue({
@@ -86,10 +89,12 @@ function createService(
       crypto as never,
       signature as never,
       executionProducer as never,
+      workspaceQuota as never,
     ),
     crypto,
     signature,
     executionProducer,
+    workspaceQuota,
     endpoint: { ...endpoint, ...endpointOverrides },
   };
 }

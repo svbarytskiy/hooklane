@@ -18,6 +18,7 @@ import { STRIPE_CLIENT } from './stripe.tokens';
 import type { StripeClient } from './stripe.types';
 import { InvoiceSyncService } from './invoice-sync.service';
 import { RefundService } from './refund.service';
+import { WorkspaceEntitlementSyncService } from 'src/entitlements/workspace-entitlement-sync.service';
 
 @Injectable()
 export class StripeWebhookProcessor {
@@ -30,6 +31,7 @@ export class StripeWebhookProcessor {
 
     private readonly invoiceSyncService: InvoiceSyncService,
     private readonly refundService: RefundService,
+    private readonly entitlementSync: WorkspaceEntitlementSyncService,
   ) {}
 
   async process(event: Stripe.Event): Promise<'processed' | 'ignored'> {
@@ -93,7 +95,7 @@ export class StripeWebhookProcessor {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        await this.handleSubscriptionChanged(event.data.object.id);
+        await this.reconcileSubscription(event.data.object.id);
         return 'processed';
       }
       case 'invoice.created':
@@ -115,7 +117,7 @@ export class StripeWebhookProcessor {
         const stripeSubscriptionId = this.getInvoiceSubscriptionId(invoice);
 
         if (stripeSubscriptionId) {
-          await this.handleSubscriptionChanged(stripeSubscriptionId);
+          await this.reconcileSubscription(stripeSubscriptionId);
         }
 
         return 'processed';
@@ -357,9 +359,7 @@ export class StripeWebhookProcessor {
     }
   }
 
-  private async handleSubscriptionChanged(
-    stripeSubscriptionId: string,
-  ): Promise<void> {
+  async reconcileSubscription(stripeSubscriptionId: string): Promise<void> {
     const subscription =
       await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
 
@@ -432,6 +432,62 @@ export class StripeWebhookProcessor {
           updatedAt: values.updatedAt,
         },
       });
+
+    await this.syncWorkspaceEntitlement(subscription, item);
+  }
+
+  private async syncWorkspaceEntitlement(
+    subscription: Stripe.Subscription,
+    item: Stripe.SubscriptionItem,
+  ): Promise<void> {
+    const workspaceId = subscription.metadata.workspaceId;
+    if (!workspaceId) return;
+
+    const billingPlanId = subscription.metadata.billingPlanId;
+    if (!billingPlanId) {
+      throw new ConflictException(
+        'Workspace subscription is missing its billing plan metadata',
+      );
+    }
+
+    const stripeCustomerId = this.getStripeResourceId(subscription.customer);
+    const currentPeriodStart = this.fromStripeTimestamp(
+      item.current_period_start,
+    );
+    const currentPeriodEnd = this.fromStripeTimestamp(item.current_period_end);
+    const entitlementStatus = this.toEntitlementStatus(subscription.status);
+
+    if (entitlementStatus === 'suspended') {
+      await this.entitlementSync.revertExpiredStripeSubscription(
+        workspaceId,
+        subscription.id,
+      );
+      return;
+    }
+
+    await this.entitlementSync.applyStripeSubscription({
+      workspaceId,
+      stripeCustomerId,
+      stripeSubscriptionId: subscription.id,
+      billingPlanId,
+      stripePriceId: item.price.id,
+      status: entitlementStatus,
+      currentPeriodStart,
+      currentPeriodEnd,
+      graceEndsAt: entitlementStatus === 'grace' ? currentPeriodEnd : null,
+    });
+  }
+
+  private toEntitlementStatus(
+    stripeStatus: Stripe.Subscription.Status,
+  ): 'active' | 'grace' | 'suspended' {
+    if (stripeStatus === 'active' || stripeStatus === 'trialing') {
+      return 'active';
+    }
+    if (stripeStatus === 'past_due') {
+      return 'grace';
+    }
+    return 'suspended';
   }
 
   private getPaymentIntentId(session: Stripe.Checkout.Session): string | null {

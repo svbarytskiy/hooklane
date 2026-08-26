@@ -23,6 +23,7 @@ import {
 import { WebhookSecretCryptoService } from './webhook-secret-crypto.service';
 import { WebhookSignatureService } from './webhook-signature.service';
 import { WorkflowExecutionProducer } from 'src/queues/workflow-execution.producer';
+import { WorkspaceQuotaService } from 'src/entitlements/workspace-quota.service';
 
 const MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
 const MAX_SOURCE_EVENT_ID_LENGTH = 200;
@@ -45,6 +46,7 @@ export class WebhookIngressService {
     private readonly webhookSecretCrypto: WebhookSecretCryptoService,
     private readonly webhookSignature: WebhookSignatureService,
     private readonly executionProducer: WorkflowExecutionProducer,
+    private readonly workspaceQuota: WorkspaceQuotaService = new WorkspaceQuotaService(),
   ) {}
 
   async acceptWebhook(
@@ -201,6 +203,12 @@ export class WebhookIngressService {
           'Webhook execution was not created',
         );
       }
+
+      await this.workspaceQuota.reserveExecution(
+        tx,
+        endpoint.workspaceId,
+        execution.id,
+      );
 
       await tx.insert(executionOutbox).values({
         executionId: execution.id,

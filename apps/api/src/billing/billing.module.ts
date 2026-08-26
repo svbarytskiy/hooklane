@@ -11,10 +11,17 @@ import { SubscriptionCheckoutService } from './subscription-checkout.service';
 import { InvoiceService } from './invoice.service';
 import { AdminBillingController } from './admin-billing.controller';
 import { AdminBillingService } from './admin-billing.service';
+import { EntitlementsModule } from 'src/entitlements/entitlements.module';
+import { WorkspaceSubscriptionCheckoutService } from './workspace-subscription-checkout.service';
+import { WorkspaceBillingController } from './workspace-billing.controller';
 
 @Module({
-  imports: [DatabaseModule, StripeModule, AuthModule],
-  controllers: [BillingController, AdminBillingController],
+  imports: [DatabaseModule, StripeModule, AuthModule, EntitlementsModule],
+  controllers: [
+    BillingController,
+    AdminBillingController,
+    WorkspaceBillingController,
+  ],
   providers: [
     BillingService,
     BillingCatalogService,
@@ -23,6 +30,7 @@ import { AdminBillingService } from './admin-billing.service';
     SubscriptionCheckoutService,
     InvoiceService,
     AdminBillingService,
+    WorkspaceSubscriptionCheckoutService,
   ],
   exports: [SubscriptionService],
 })

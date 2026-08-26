@@ -9,6 +9,8 @@ const workerState = {
         attemptsMade: number;
         opts?: { attempts?: number };
         id?: string;
+        token?: string;
+        moveToDelayed?: (timestamp: number, token?: string) => Promise<void>;
       }) => Promise<void>)
     | undefined,
   close: jest.fn().mockResolvedValue(undefined),
@@ -75,6 +77,7 @@ describe("WorkflowExecutionProcessor", () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
+      tryAcquireExecutionSlot: jest.fn().mockResolvedValue("acquired"),
       startAttempt: jest
         .fn()
         .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),
@@ -117,10 +120,49 @@ describe("WorkflowExecutionProcessor", () => {
     expect(database.markSucceeded).toHaveBeenCalledWith("execution-1");
   });
 
+  it("delays a job when its workspace has no free execution slot", async () => {
+    const database = {
+      ping: jest.fn().mockResolvedValue(undefined),
+      tryAcquireExecutionSlot: jest
+        .fn()
+        .mockResolvedValue("concurrency_limit_reached"),
+      claimExecution: jest.fn(),
+    };
+    const processor = new WorkflowExecutionProcessor(
+      createConfig() as never,
+      database as never,
+      {} as never,
+      {} as never,
+    );
+    const moveToDelayed = jest.fn().mockResolvedValue(undefined);
+
+    await processor.onModuleInit();
+    const processing = workerState.processor?.({
+      id: "job-1",
+      token: "worker-lock-token",
+      attemptsMade: 0,
+      opts: { attempts: 3 },
+      moveToDelayed,
+      data: {
+        executionId: "execution-1",
+        incomingEventId: "event-1",
+        workflowVersionId: "version-1",
+      },
+    });
+
+    await expect(processing).rejects.toMatchObject({ name: "DelayedError" });
+    expect(moveToDelayed).toHaveBeenCalledWith(
+      expect.any(Number),
+      "worker-lock-token",
+    );
+    expect(database.claimExecution).not.toHaveBeenCalled();
+  });
+
   it("requeues retryable failures while BullMQ attempts remain", async () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
+      tryAcquireExecutionSlot: jest.fn().mockResolvedValue("acquired"),
       startAttempt: jest
         .fn()
         .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),
@@ -171,6 +213,7 @@ describe("WorkflowExecutionProcessor", () => {
     const database = {
       ping: jest.fn().mockResolvedValue(undefined),
       claimExecution: jest.fn().mockResolvedValue(true),
+      tryAcquireExecutionSlot: jest.fn().mockResolvedValue("acquired"),
       startAttempt: jest
         .fn()
         .mockResolvedValue({ id: "attempt-1", attemptNumber: 1 }),

@@ -8,9 +8,10 @@ import { OAuthSecurityService } from './oauth/oauth-security.service';
 import { OAuthTokenCryptoService } from './oauth/oauth-token-crypto.service';
 import { SlackOAuthProvider } from './oauth/slack-oauth.provider';
 import { SlackOAuthCallbackController } from './slack-oauth-callback.controller';
+import { EntitlementsModule } from 'src/entitlements/entitlements.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, EntitlementsModule],
   providers: [
     IntegrationConnectionsRepository,
     OAuthProviderRegistry,

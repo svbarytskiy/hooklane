@@ -36,6 +36,8 @@ export type ActiveSlackConnection = {
 
 export type ExecutionRepository = {
   ping(): Promise<void>;
+  tryAcquireExecutionSlot(executionId: string): Promise<"acquired" | "concurrency_limit_reached" | "skipped">;
+  releaseExecutionSlot(executionId: string, terminal: boolean): Promise<void>;
   claimExecution(executionId: string): Promise<boolean>;
   isExecutionCancelled(executionId: string): Promise<boolean>;
   loadExecutionContext(executionId: string): Promise<ExecutionContext>;
@@ -158,6 +160,15 @@ export function createExecutionRepository(
   return {
     async ping() {
       await db.execute(sql`select 1`);
+    },
+    async tryAcquireExecutionSlot(executionId) {
+      const rows = await db.execute(sql`select public.try_acquire_workspace_execution_slot(${executionId}) as result`);
+      const result = (rows[0] as { result?: string } | undefined)?.result;
+      if (result === "acquired" || result === "concurrency_limit_reached") return result;
+      return "skipped";
+    },
+    async releaseExecutionSlot(executionId, terminal) {
+      await db.execute(sql`select public.release_workspace_execution_slot(${executionId}, ${terminal})`);
     },
     async loadExecutionContext(executionId) {
       const [context] = await db
@@ -367,6 +378,7 @@ export function createExecutionRepository(
           )
           .returning({ id: executions.id });
         if (updated.length === 1) {
+          await tx.execute(sql`select public.release_workspace_execution_slot(${executionId})`);
           await appendNotification(tx, executionId, "execution.succeeded", {
             status: "succeeded",
           });
@@ -392,6 +404,7 @@ export function createExecutionRepository(
           )
           .returning({ id: executions.id });
         if (updated.length === 1) {
+          await tx.execute(sql`select public.release_workspace_execution_slot(${executionId})`);
           await appendNotification(tx, executionId, "execution.failed", {
             status: "failed",
           });
@@ -416,6 +429,7 @@ export function createExecutionRepository(
           )
           .returning({ id: executions.id });
         if (updated.length === 1) {
+          await tx.execute(sql`select public.release_workspace_execution_slot(${executionId}, false)`);
           await appendNotification(
             tx,
             executionId,

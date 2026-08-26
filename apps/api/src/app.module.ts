@@ -18,6 +18,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { QueuesModule } from './queues/queues.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { EntitlementsModule } from './entitlements/entitlements.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
       envFilePath: ['apps/api/.env.local', '.env.local', '.env'],
       validate: validateEnv,
     }),
+    ScheduleModule.forRoot(),
     SupabaseModule,
     AuthModule,
     DatabaseModule,
@@ -40,6 +43,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     QueuesModule,
     RealtimeModule,
     IntegrationsModule,
+    EntitlementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

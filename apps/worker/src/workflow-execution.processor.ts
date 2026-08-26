@@ -2,7 +2,12 @@ import type { ExecuteWorkflowJob } from "@hooklane/contracts";
 import { createWorkflowExecutionWorker } from "@hooklane/queue";
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { UnrecoverableError, type Job, type Worker } from "bullmq";
+import {
+  DelayedError,
+  UnrecoverableError,
+  type Job,
+  type Worker,
+} from "bullmq";
 import type { WorkerEnv } from "./config/env.schema";
 import { WorkerDatabaseService } from "./database/worker-database.service";
 import { ExecutionDataSanitizerService } from "./runtime/execution-data-sanitizer.service";
@@ -81,9 +86,24 @@ export class WorkflowExecutionProcessor
       `[worker] processing job=${job.id} execution=${job.data.executionId}`,
     );
 
+    const slot = await this.database.tryAcquireExecutionSlot(
+      job.data.executionId,
+    );
+    if (slot === "concurrency_limit_reached") {
+      const delayMs = this.config.get("WORKFLOW_BACKOFF_DELAY_MS", {
+        infer: true,
+      });
+      await job.moveToDelayed(Date.now() + delayMs, job.token);
+      throw new DelayedError("Workspace concurrency limit reached");
+    }
+    if (slot === "skipped") {
+      return;
+    }
+
     const claimed = await this.database.claimExecution(job.data.executionId);
 
     if (!claimed) {
+      await this.database.releaseExecutionSlot(job.data.executionId, false);
       console.log(
         `[worker] skipping execution=${job.data.executionId}; it is already terminal or being processed`,
       );
